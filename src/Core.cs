@@ -113,8 +113,8 @@ namespace Prosper
         public bool ScreenshotButton { get; set; }
         public bool KeepHistory { get; set; }
         public bool ShowBubble { get; set; }
-        public int BubbleX { get; set; }
-        public int BubbleY { get; set; }
+        public int BarX { get; set; }
+        public int BarY { get; set; }
         public string ApiKeySealed { get; set; }
         // MCP: off until the user connects a server.
         public bool McpOn { get; set; }
@@ -130,7 +130,7 @@ namespace Prosper
         public Settings()
         {
             ApiBase = "https://api.openai.com/v1"; Model = "gpt-6-luna"; TranscribeModel = "gpt-4o-mini-transcribe"; AboutMe = "";
-            Cleanup = true; ScreenshotButton = true; KeepHistory = true; ShowBubble = true; BubbleX = -1; BubbleY = -1;
+            Cleanup = true; ScreenshotButton = true; KeepHistory = true; ShowBubble = true; BarX = -1; BarY = -1;
             ApiKeySealed = ""; McpServer = ""; McpAllowed = ""; McpClientId = ""; McpTokenUrl = "";
             McpAccessSealed = ""; McpRefreshSealed = ""; McpManualSealed = "";
         }

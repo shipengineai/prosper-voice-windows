@@ -28,8 +28,6 @@ namespace Prosper
         [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
         [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
         [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint n, INPUT[] inputs, int size);
-        [DllImport("winmm.dll", CharSet = CharSet.Unicode)] public static extern int mciSendString(string cmd, StringBuilder ret, int len, IntPtr cb);
-        [DllImport("winmm.dll", CharSet = CharSet.Unicode)] public static extern bool mciGetErrorString(int err, StringBuilder buf, int len);
 
         [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public InputUnion u; }
         [StructLayout(LayoutKind.Explicit)] struct InputUnion { [FieldOffset(0)] public MOUSEINPUT mi; [FieldOffset(0)] public KEYBDINPUT ki; }
@@ -63,67 +61,6 @@ namespace Prosper
         }
     }
 
-    /// <summary>Records the default microphone with Windows' own MCI audio: a 16 kHz mono WAV, no extra libraries.</summary>
-    class Recorder
-    {
-        readonly string Alias;
-        readonly string FileName;
-        public bool Recording { get; private set; }
-        public Recorder(string alias) { Alias = alias; FileName = alias + ".wav"; } // one per place that records
-
-        static int Mci(string cmd) { return Native.mciSendString(cmd, null, 0, IntPtr.Zero); }
-        static string Error(int code)
-        {
-            var b = new StringBuilder(256); Native.mciGetErrorString(code, b, b.Capacity); return b.ToString();
-        }
-
-        /// <summary>Starts recording; returns null when it started, or why it couldn't.</summary>
-        public string Start()
-        {
-            Mci("close " + Alias);
-            int r = Mci("open new type waveaudio alias " + Alias);
-            if (r != 0) return Error(r);
-            Mci("set " + Alias + " alignment 2 bitspersample 16 samplespersec 16000 channels 1 bytespersec 32000");
-            r = Mci("record " + Alias);
-            if (r != 0) { Mci("close " + Alias); return Error(r); }
-            Recording = true;
-            return null;
-        }
-
-        /// <summary>Stops and writes the clip to a temp file; the file and its loudest sample (0 = silence).</summary>
-        public string Stop(out int peak)
-        {
-            peak = 0;
-            if (!Recording) return null;
-            Recording = false;
-            Directory.CreateDirectory(Paths.Temp);
-            string path = Path.Combine(Paths.Temp, FileName);
-            try { File.Delete(path); } catch { }
-            Mci("stop " + Alias);
-            int r = Mci("save " + Alias + " \"" + path + "\" wait");
-            Mci("close " + Alias);
-            if (r != 0 || !File.Exists(path)) { Log.Write("recorder: save failed " + r); return null; }
-            peak = Peak(path);
-            return path;
-        }
-
-        public void Cancel() { if (Recording) { Recording = false; Mci("stop " + Alias); Mci("close " + Alias); } }
-
-        static int Peak(string wav)
-        {
-            try
-            {
-                byte[] b = File.ReadAllBytes(wav);
-                int start = 44;
-                for (int i = 12; i + 8 < b.Length; i++)
-                    if (b[i] == 'd' && b[i + 1] == 'a' && b[i + 2] == 't' && b[i + 3] == 'a') { start = i + 8; break; }
-                int max = 0;
-                for (int i = start; i + 1 < b.Length; i += 2) { int v = Math.Abs((short)(b[i] | (b[i + 1] << 8))); if (v > max) max = v; }
-                return max;
-            }
-            catch { return 1; }
-        }
-    }
 
     /// <summary>The clipboard, borrowed briefly and given back. Text Prosper only pastes is kept out of clipboard history.</summary>
     static class Clip

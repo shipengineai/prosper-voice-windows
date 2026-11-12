@@ -17,5 +17,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "  $l.TargetPath = '%DEST%\ProsperVoice.exe'; $l.WorkingDirectory = '%DEST%';" ^
   "  $l.Description = 'Prosper Voice: dictation and Assistant'; $l.Save() }"
 start "" "%DEST%\ProsperVoice.exe"
-echo Prosper Voice is installed in %DEST% and running (look for the bubble and the tray icon).
+echo Prosper Voice is installed in %DEST% and running (look for the bar at the bottom of the screen and the tray icon).
 echo To remove it: quit it from the tray, delete that folder, the two "Prosper Voice" shortcuts and %APPDATA%\ProsperVoice.

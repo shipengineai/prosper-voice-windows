@@ -59,7 +59,7 @@ namespace Prosper
             catch (Exception e) { Check("no key refused", e.Message.Contains("API key"), e.Message); }
             Settings.Current.ApiKeySealed = keep;
 
-            // The microphone: one second through Windows' own audio (MCI).
+            // The microphone: one second through Windows' own audio (waveIn).
             var rec = new Recorder("prosperselftest");
             string why = rec.Start();
             if (why != null) Check("microphone opens", false, why);

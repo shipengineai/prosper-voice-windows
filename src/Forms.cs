@@ -37,7 +37,7 @@ namespace Prosper
         readonly CheckBox cleanup = new CheckBox { Text = "Clean up dictation (removes ums and false starts, adds punctuation)", AutoSize = true };
         readonly CheckBox shot = new CheckBox { Text = "Show the \"📷 Add screen\" button while the Assistant listens", AutoSize = true };
         readonly CheckBox keep = new CheckBox { Text = "Keep history on this PC (encrypted for your Windows account)", AutoSize = true };
-        readonly CheckBox bubble = new CheckBox { Text = "Show the floating bubble", AutoSize = true };
+        readonly CheckBox bubble = new CheckBox { Text = "Show the Prosper bar when idle", AutoSize = true };
         readonly CheckBox startup = new CheckBox { Text = "Start Prosper when I sign in to Windows", AutoSize = true };
         readonly TextBox mcpServer = new TextBox { Width = 360 }, mcpToken = new TextBox { UseSystemPasswordChar = true, Width = 360 }, mcpAllowed = new TextBox { Width = 360 };
         readonly CheckBox mcpOn = new CheckBox { Text = "Let the Assistant use this server", AutoSize = true };
@@ -102,7 +102,7 @@ namespace Prosper
 
             Section("Shortcuts");
             Row("", Hint("Ctrl+Alt+Space  dictate (again to stop)\nCtrl+Alt+A  Assistant (again to stop)\nCtrl+Alt+S  add the screen while the Assistant listens\nCtrl+Alt+H  history\n" +
-                "Bubble: click to dictate, double-click for the Assistant, hold for history, right-click for the menu, drag to move."));
+                "Bar (bottom of the screen): click to dictate, double-click for the Assistant, hold for history, right-click for the menu, drag to move."));
 
             var save = new Button { Text = "Save", AutoSize = true, DialogResult = DialogResult.None };
             save.Click += (o, e) => { Apply(); Close(); };

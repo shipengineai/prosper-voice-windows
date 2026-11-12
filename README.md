@@ -6,19 +6,26 @@ installed and no admin rights are needed: copy it to the laptop and run it.
 
 ## Use
 
-| | Bubble | Shortcut |
+| | Prosper bar | Shortcut |
 |---|---|---|
 | Dictate into the app you're typing in (click again to stop) | click | Ctrl+Alt+Space |
 | Assistant: ask for an email, a reply, an answer… | double-click | Ctrl+Alt+A |
-| Add the screen to the Assistant request | **📷 Add screen** beside the bubble | Ctrl+Alt+S |
+| Add the screen to the Assistant request | **Add screen** in the bar | Ctrl+Alt+S |
 | History and follow-up chat | hold | Ctrl+Alt+H |
-| Menu: settings, hide the bubble, quit | right-click | |
+| Menu: settings, hide the bar when idle, quit | right-click | |
+
+**The Prosper bar** is a small frosted-glass pill at the bottom centre of the screen; drag it anywhere. At rest it is a
+thin sliver with a gold dot, and hovering shows what it does. While you talk it opens into **✕ cancel · timer · live
+waveform · ✓ finish**. The waveform follows your voice: tall while you speak, flat in pauses, and it adjusts to quiet
+mics by itself. In Assistant mode the bar gets a gold edge, a ✦ and an **Add screen** button. While Prosper works,
+the bar says what it is doing ("Transcribing", "Thinking with your screen"), then confirms ("Typed · copied").
+`ProsperVoice.exe --preview` plays through every state with your real microphone level and no API calls.
 
 - **Dictation** is transcribed, cleaned up (no ums, proper punctuation) and pasted where the cursor is.
 - **With text selected**, what you say is an instruction for that text ("make this formal", "translate to Hindi"),
   and the result replaces the selection.
 - **The Assistant** writes what you ask for. It gets your request, the selected text, the app's name, *About you*
-  from settings, and the screen if you clicked **📷 Add screen**. If a text field has focus, the answer is typed
+  from settings, and the screen if you clicked **Add screen**. If a text field has focus, the answer is typed
   there; otherwise it opens in a card with Insert, Copy and Open chat. Every answer is also copied.
 - **History** keeps every conversation: what you said, the screenshot, the answer, and each tool call. You can type
   or speak follow-ups there, or attach an audio file (📎, up to 25 MB) to get its transcript or ask about it.
@@ -55,8 +62,8 @@ Built to be safe on a work laptop:
   logged or written in plain text.
 - **History** is in `%APPDATA%\ProsperVoice\history`, one file per conversation (screenshots included), each
   encrypted with DPAPI for your account. Turn it off under *Keep history on this PC*, or delete it with *Clear history*.
-- **Screenshots** are taken only when you click **📷 Add screen** or press Ctrl+Alt+S, and only of the monitor you're
-  working on. The bubble hides while the picture is taken.
+- **Screenshots** are taken only when you click **Add screen** or press Ctrl+Alt+S, and only of the monitor you're
+  working on. The bar itself is kept out of screenshots and screen shares (Windows 10 2004 and later).
 - **Clipboard:** Prosper borrows the clipboard to read a selection and to paste, then puts back what was there. Text
   it pastes is marked so Windows clipboard history (Win+V) and cloud clipboard sync skip it. Copied answers are never
   synced to the cloud.

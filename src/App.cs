@@ -1,5 +1,5 @@
-// Prosper Voice for Windows: the tray icon, global shortcuts and the bubble, and what happens between a recording
-// and the text landing in the app: dictation, spoken edits of a selection, and the Assistant.
+// Prosper Voice for Windows: the tray icon, global shortcuts and the Prosper bar, and what happens between a
+// recording and the text landing in the app: dictation, spoken edits of a selection, and the Assistant.
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -24,6 +24,7 @@ namespace Prosper
                 using (var g = Graphics.FromHwnd(IntPtr.Zero)) Floating.Dpi = g.DpiX / 96f;
                 Application.ThreadException += (s, e) => Log.Write("error: " + e.Exception.GetType().Name);
                 Log.Write("start " + Application.ProductVersion);
+                App.Preview = Bar.AllowCapture = Array.IndexOf(Environment.GetCommandLineArgs(), "--preview") > 0;
                 Application.Run(new App());
             }
         }
@@ -48,9 +49,7 @@ namespace Prosper
         const int HkDictate = 1, HkAssist = 2, HkScreen = 3, HkHistory = 4;
         readonly Control ui = new Control();
         readonly NotifyIcon tray = new NotifyIcon();
-        readonly Bubble bubble = new Bubble();
-        readonly StatusChip chip = new StatusChip();
-        readonly ShotButton shotButton = new ShotButton();
+        readonly Bar bar = new Bar();
         readonly AnswerCard card = new AnswerCard();
         readonly Hotkeys keys = new Hotkeys();
         readonly Recorder recorder = new Recorder("prosperrec");
@@ -74,14 +73,17 @@ namespace Prosper
             tray.ContextMenuStrip = Menu();
             tray.DoubleClick += (s, e) => ShowHistory(null);
 
-            bubble.Tap += () => Toggle(false);
-            bubble.DoubleTap += () => Toggle(true);
-            bubble.Hold += () => ShowHistory(lastConversation);
-            bubble.ShowMenu += () => Menu().Show(Cursor.Position);
-            bubble.PlaceSaved();
-            if (S.ShowBubble) bubble.Show();
+            bar.Tap += () => Toggle(false);
+            bar.DoubleTap += () => Toggle(true);
+            bar.Hold += () => ShowHistory(lastConversation);
+            bar.ShowMenu += () => Menu().Show(Cursor.Position);
+            bar.Finish += () => { if (mode == Mode.Recording) Stop(); };
+            bar.Cancel += CancelRecording;
+            bar.ToggleScreen += AddScreen;
+            bar.LevelSource = () => recorder.Level;
+            bar.PlaceSaved();
+            bar.KeepVisible = S.ShowBubble;
 
-            shotButton.Toggle += () => AddScreen();
             card.Insert += async () => await Insert(card.Answer);
             card.OpenChat += () => ShowHistory(lastConversation);
             autoStop.Tick += (s, e) => { if (mode == Mode.Recording) Stop(); };
@@ -93,15 +95,43 @@ namespace Prosper
                 else if (id == HkScreen) { if (mode == Mode.Recording && assist) AddScreen(); }
                 else if (id == HkHistory) ShowHistory(lastConversation);
             };
+            if (Preview) { Demo(); return; } // no shortcuts, no setup: just the bar
             var taken = new System.Collections.Generic.List<string>();
             if (!keys.Add(HkDictate, Keys.Space)) taken.Add("Ctrl+Alt+Space");
             if (!keys.Add(HkAssist, Keys.A)) taken.Add("Ctrl+Alt+A");
             if (!keys.Add(HkScreen, Keys.S)) taken.Add("Ctrl+Alt+S");
             if (!keys.Add(HkHistory, Keys.H)) taken.Add("Ctrl+Alt+H");
-            if (taken.Count > 0) Balloon(string.Join(", ", taken) + " already belong to another app: use the bubble for those.");
+            if (taken.Count > 0)
+            {
+                Log.Write("shortcuts taken by another app: " + string.Join(", ", taken));
+                Balloon(string.Join(", ", taken) + " already belong to another app: use the bar for those.");
+            }
 
             if (!S.Configured) { Balloon("Add your OpenAI API key to start."); ShowSettings(); }
             else if (!S.ShowBubble) Balloon("Prosper Voice is running. Ctrl+Alt+Space to dictate, Ctrl+Alt+A for the Assistant.");
+        }
+
+        public static bool Preview;
+
+        /// <summary>
+        /// ProsperVoice.exe --preview: plays through every state of the bar with the real microphone level, so the design
+        /// and the waveform can be seen without an API key. Nothing is recorded to disk or sent anywhere.
+        /// </summary>
+        async void Demo()
+        {
+            bar.KeepVisible = true;
+            await Task.Delay(1200);
+            if (recorder.Start() != null) Say("No microphone: the waveform stays flat", 2500, true);
+            bar.State = BarState.Dictating; await Task.Delay(6000);
+            bar.State = BarState.Assisting; await Task.Delay(3500);
+            bar.ScreenAdded = true; await Task.Delay(3000);
+            int loudest; string clip = recorder.Stop(out loudest);
+            if (clip != null) try { File.Delete(clip); } catch { }
+            Log.Write("preview: loudest sample " + loudest); // tells whether the mic heard anything
+            bar.State = BarState.Working; bar.Step("Transcribing"); await Task.Delay(1500);
+            bar.Step("Thinking with your screen"); await Task.Delay(2000);
+            Done(); Say("Typed · copied", 2500); await Task.Delay(3500);
+            Say("Preview done. Quit from the tray, then start Prosper normally.", 6000);
         }
 
         ContextMenuStrip Menu()
@@ -111,22 +141,17 @@ namespace Prosper
             m.Items.Add("Assistant  (Ctrl+Alt+A)", null, (s, e) => Toggle(true));
             m.Items.Add("History  (Ctrl+Alt+H)", null, (s, e) => ShowHistory(lastConversation));
             m.Items.Add("-");
-            m.Items.Add(S.ShowBubble ? "Hide the bubble" : "Show the bubble", null, (s, e) => { S.ShowBubble = !S.ShowBubble; Settings.Save(); ApplyBubble(); });
+            m.Items.Add(S.ShowBubble ? "Hide the bar when idle" : "Show the bar", null, (s, e) => { S.ShowBubble = !S.ShowBubble; Settings.Save(); ApplyBar(); });
+            m.Items.Add("Move the bar back to the bottom", null, (s, e) => { S.BarX = -1; S.BarY = -1; Settings.Save(); bar.PlaceSaved(); });
             m.Items.Add("Settings", null, (s, e) => ShowSettings());
             m.Items.Add("-");
             m.Items.Add("Quit", null, (s, e) => Quit());
             return m;
         }
 
-        void ApplyBubble()
-        {
-            tray.ContextMenuStrip = Menu();
-            if (S.ShowBubble) { if (!bubble.Visible) bubble.Show(); } else bubble.Hide();
-        }
+        void ApplyBar() { tray.ContextMenuStrip = Menu(); bar.KeepVisible = S.ShowBubble; }
 
-        Rectangle Anchor { get { return bubble.Visible ? bubble.Bounds : new Rectangle(Cursor.Position, new Size(1, 1)); } }
-
-        void Say(string message, int hideAfterMs = 0) { if (bubble.Visible || mode != Mode.Idle) chip.Say(message, Anchor, hideAfterMs); }
+        void Say(string message, int ms, bool error = false) { bar.Say(message, ms, error); }
 
         void Balloon(string message) { tray.ShowBalloonTip(5000, "Prosper Voice", message, ToolTipIcon.Info); }
 
@@ -137,57 +162,64 @@ namespace Prosper
             if (mode == Mode.Working) return;
             if (mode == Mode.Recording) { Stop(); return; }
             if (!S.Configured) { ShowSettings(); return; }
-            card.Hide(); chip.Hide();
+            card.Hide();
             assist = assistant; screen = null; mode = Mode.Working; // until the target is read
             target = await Target.Capture();
             string why = recorder.Start();
             if (why != null)
             {
                 mode = Mode.Idle;
+                Say("Microphone unavailable", 5000, true);
                 Balloon("Couldn't start the microphone: " + why + ". Check Windows Settings → Privacy & security → Microphone → Let desktop apps access your microphone.");
                 return;
             }
             mode = Mode.Recording;
-            bubble.State = assist ? BubbleState.Assisting : BubbleState.Dictating;
-            if (!bubble.Visible) Say(assist ? "Assistant listening… Ctrl+Alt+A to finish" : "Listening… Ctrl+Alt+Space to finish");
-            if (assist && S.ScreenshotButton) { shotButton.Set(false, null); shotButton.PlaceBeside(Anchor, Floating.Px(6)); shotButton.Show(); }
+            bar.State = assist ? BarState.Assisting : BarState.Dictating;
             autoStop.Start();
             Log.Write("recording " + (assist ? "assistant" : target.Selected != null ? "edit" : "dictation"));
         }
 
-        /// <summary>The screen behind the bubble, taken when the user asks for it (the bubble and buttons hide for the moment).</summary>
+        void CancelRecording()
+        {
+            if (mode != Mode.Recording) return;
+            autoStop.Stop();
+            recorder.Cancel();
+            Done();
+            Say("Cancelled", 1200);
+        }
+
+        /// <summary>The screen behind the bar, taken when the user asks for it.</summary>
         async void AddScreen()
         {
-            if (shotButton.Added) { screen = null; shotButton.Set(false, null); return; }
-            bool b = bubble.Visible, c = chip.Visible;
-            bubble.Hide(); shotButton.Hide(); chip.Hide();
-            await Task.Delay(150);
+            if (mode != Mode.Recording || !assist) return;
+            if (bar.ScreenAdded) { screen = null; bar.ScreenAdded = false; return; }
+            // The bar is kept out of captures where Windows allows it; elsewhere it steps aside for the moment.
+            bool hide = !bar.ExcludedFromCapture;
+            if (hide) { bar.Hide(); await Task.Delay(150); }
             try { screen = await Task.Run(() => Shot.Take(target.Window)); }
             catch (Exception e) { Log.Write("screenshot failed: " + e.GetType().Name); screen = null; }
-            if (b) bubble.Show(); if (c) chip.Show();
-            if (mode == Mode.Recording) { shotButton.Set(screen != null, screen != null ? null : "Can't capture"); shotButton.Show(); }
-            else if (!bubble.Visible && screen != null) Say("✓ Screen added", 1500);
+            if (hide) bar.Show();
+            if (mode == Mode.Recording) bar.ScreenAdded = screen != null;
         }
 
         async void Stop()
         {
             autoStop.Stop();
-            shotButton.Hide();
             int peak;
             string file = recorder.Stop(out peak);
             mode = Mode.Working;
-            bubble.State = BubbleState.Working;
+            bar.State = BarState.Working;
             var t = target; bool a = assist; byte[] image = assist ? screen : null;
             string kind = a ? "assistant" : t.Selected != null ? "rewrite" : "dictation";
             if (file == null || peak < 50)
             {
                 Done();
-                Say(file == null ? "Nothing was recorded." : "The microphone recorded silence. Check Windows' microphone privacy setting.", 4000);
+                Say(file == null ? "Nothing was recorded" : "The microphone heard silence", 4000, true);
                 return;
             }
-            Say("Transcribing");
+            bar.Step("Transcribing");
             string heard = null; AssistResult result = null; string error = null;
-            Action<string> step = m => ui.BeginInvoke((Action)(() => Say(m)));
+            Action<string> step = m => ui.BeginInvoke((Action)(() => bar.Step(m)));
             try
             {
                 result = await Task.Run(() =>
@@ -197,7 +229,7 @@ namespace Prosper
                     heard = said;
                     if (a)
                     {
-                        step(image != null ? "Thinking (with your screen)" : "Thinking");
+                        step(image != null ? "Thinking with your screen" : "Thinking");
                         bool useMcp = S.McpOn && S.McpServer.Length > 0;
                         string token = useMcp ? Mcp.AccessToken() : null;
                         var ctx = new AssistContext
@@ -220,7 +252,7 @@ namespace Prosper
                 var c = History.Add(null, kind, t.App, heard ?? "", result, error, image);
                 lastConversation = c.Id;
             }
-            if (error != null) { Done(); Say(error, 6000); return; }
+            if (error != null) { Done(); Say(error, 6000, true); return; }
 
             bool type = !result.IsStatus && (t.Editable || t.Selected != null);
             if (a) Clip.Copy(result.Text); // every Assistant answer is ready to paste again
@@ -228,23 +260,22 @@ namespace Prosper
             {
                 await Insert(result.Text);
                 Done();
-                Say(a ? "✓ Typed · copied" : "✓ Done", 1800);
+                Say(a ? "Typed · copied" : "Pasted", 1800);
             }
             else if (a)
             {
                 Done();
-                chip.Hide();
-                card.Show(result.Text, result.IsStatus, Anchor);
+                card.Show(result.Text, result.IsStatus, bar.PillOnScreen);
             }
             else
             {
                 Clip.Copy(result.Text);
                 Done();
-                Say("Copied: no text field is focused, paste it anywhere", 3000);
+                Say("Copied · no text field, paste it anywhere", 3000);
             }
         }
 
-        void Done() { mode = Mode.Idle; bubble.State = BubbleState.Idle; }
+        void Done() { mode = Mode.Idle; bar.State = BarState.Rest; }
 
         /// <summary>Pastes into the window that was in front when the recording started.</summary>
         async Task Insert(string text)
@@ -285,7 +316,7 @@ namespace Prosper
             if (settings == null || settings.IsDisposed)
             {
                 settings = new SettingsForm();
-                settings.Saved += ApplyBubble;
+                settings.Saved += ApplyBar;
                 settings.FormClosed += (s, e) => settings = null;
             }
             settings.Show(); settings.Activate();
@@ -299,16 +330,19 @@ namespace Prosper
             ExitThread();
         }
 
+        /// <summary>The tray icon: the glass pill with its waveform and gold centre bar.</summary>
         static Icon TrayIcon()
         {
             var bmp = new Bitmap(32, 32);
             using (var g = Graphics.FromImage(bmp))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                using (var b = new SolidBrush(Bubble.Ink)) g.FillEllipse(b, 1, 1, 30, 30);
-                float[] h = { 6, 12, 16, 10, 6 };
-                using (var p = new Pen(Bubble.Gold, 2.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                    for (int i = 0; i < h.Length; i++) g.DrawLine(p, 16 + (i - 2) * 4.5f, 16 - h[i] / 2, 16 + (i - 2) * 4.5f, 16 + h[i] / 2);
+                using (var p = Floating.Round(new RectangleF(1, 6, 30, 20), 10))
+                using (var b = new SolidBrush(Color.FromArgb(24, 24, 27))) g.FillPath(b, p);
+                float[] h = { 4, 9, 13, 9, 4 };
+                using (var pen = new Pen(Color.White, 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    for (int i = 0; i < h.Length; i++) { float x = 16 + (i - 2) * 4.4f; if (i != 2) g.DrawLine(pen, x, 16 - h[i] / 2, x, 16 + h[i] / 2); }
+                using (var gold = new Pen(Theme.Gold, 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round }) g.DrawLine(gold, 16, 16 - 6.5f, 16, 16 + 6.5f);
             }
             return Icon.FromHandle(bmp.GetHicon());
         }
