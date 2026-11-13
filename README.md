@@ -95,3 +95,16 @@ The output is `dist\ProsperVoice.exe`. The logo is drawn in code (`src/Logo.cs`)
 `assets/logo.png` all come from one drawing. `tests\run.cmd` runs a self-test that needs no API key and
 records one second from the microphone. The code is plain C# 5 with WinForms and no third-party libraries, so it's
 easy to audit.
+
+## Release
+
+Ready-to-run builds are on the [Releases](../../releases) page. To publish a new one, push a version tag:
+
+```bat
+git tag v1.1
+git push origin v1.1
+```
+
+The *Release* GitHub Action (`.github/workflows/release.yml`) then builds the `.exe` on a clean Windows machine, runs
+the self-test, and publishes `ProsperVoice.exe`, `install.cmd` and `SHA256SUMS.txt` with install notes and the list of
+changes. It can also be run by hand from the Actions tab; for an existing release it replaces the files.

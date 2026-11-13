@@ -18,8 +18,9 @@ namespace Prosper
         }
 
         [STAThread]
-        static int Main()
+        static int Main(string[] args)
         {
+            bool mic = Array.IndexOf(args, "--no-mic") < 0; // build servers have no microphone
             // Markdown answers render, and nothing in them can inject markup.
             string html = Markdown.Html("## Plan\n- **one** and `code`\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n<script>alert(1)</script>\nsee https://example.com.");
             Check("markdown heading", html.Contains("<h3>Plan</h3>"));
@@ -61,8 +62,9 @@ namespace Prosper
 
             // The microphone: one second through Windows' own audio (waveIn).
             var rec = new Recorder("prosperselftest");
-            string why = rec.Start();
-            if (why != null) Check("microphone opens", false, why);
+            string why = mic ? rec.Start() : null;
+            if (!mic) Console.WriteLine("SKIP  microphone (--no-mic)");
+            else if (why != null) Check("microphone opens", false, why);
             else
             {
                 Thread.Sleep(1000);

@@ -1,5 +1,5 @@
 @echo off
-rem Builds and runs the self-test (no API key needed; it records one second from the microphone).
+rem Builds and runs the self-test (no API key needed; it records one second from the microphone, unless --no-mic).
 setlocal
 set FW=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319
 if not exist "%FW%\csc.exe" set FW=%WINDIR%\Microsoft.NET\Framework\v4.0.30319
@@ -11,4 +11,4 @@ if not exist dist mkdir dist
   /r:"%FW%\WPF\UIAutomationClient.dll" /r:"%FW%\WPF\UIAutomationTypes.dll" /r:"%FW%\WPF\WindowsBase.dll" ^
   src\*.cs tests\Smoke.cs
 if errorlevel 1 exit /b 1
-dist\SelfTest.exe
+dist\SelfTest.exe %*
