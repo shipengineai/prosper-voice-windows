@@ -468,27 +468,30 @@ namespace Prosper
 
         public AnswerCard()
         {
-            Size = new Size(Px(480), Px(380));
-            BackColor = Color.FromArgb(63, 63, 70); Padding = new Padding(1);
-            var inner = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(250, 250, 249) };
-            var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = Px(44), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(Px(8), Px(7), Px(8), Px(7)), BackColor = Color.FromArgb(24, 24, 27) };
+            Size = new Size(Px(500), Px(400));
+            BackColor = Style.Line; Padding = new Padding(1);
+            var inner = new Panel { Dock = DockStyle.Fill, BackColor = Style.Bg };
+            // Top: the logo and "Prosper"; bottom: Insert · Copy · Open chat · Close.
+            var top = new Panel { Dock = DockStyle.Top, Height = Px(44), BackColor = Style.Bg };
+            top.Controls.Add(new LogoView(Px(22)) { Location = new Point(Px(16), Px(12)) });
+            top.Controls.Add(new Label { Text = "Prosper", Font = Style.Strong, ForeColor = Style.Text, AutoSize = true, Location = new Point(Px(46), Px(13)) });
+            top.Controls.Add(new Label { Text = "Assistant", Font = Style.Small, ForeColor = Style.Gold, AutoSize = true, Location = new Point(Px(104), Px(15)) });
+            top.Paint += (s, e) => { using (var p = new Pen(Style.Line)) e.Graphics.DrawLine(p, 0, top.Height - 1, top.Width, top.Height - 1); };
+            var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = Px(52), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(Px(12), Px(10), Px(8), Px(10)), BackColor = Style.Surface };
+            bar.Paint += (s, e) => { using (var p = new Pen(Style.Line)) e.Graphics.DrawLine(p, 0, 0, bar.Width, 0); };
             bar.Controls.Add(Btn("Close", false, (s, e) => Hide()));
             bar.Controls.Add(Btn("Open chat", false, (s, e) => { Hide(); if (OpenChat != null) OpenChat(); }));
             bar.Controls.Add(Btn("Copy", false, (s, e) => { Clip.Copy(answer); }));
             bar.Controls.Add(Btn("Insert", true, (s, e) => { Hide(); if (Insert != null) Insert(); }));
             web.Navigating += Browser.OpenLinksOutside;
-            inner.Controls.Add(web); inner.Controls.Add(bar);
+            inner.Controls.Add(web); inner.Controls.Add(bar); inner.Controls.Add(top);
             Controls.Add(inner);
         }
 
         Button Btn(string t, bool primary, EventHandler click)
         {
-            var b = new Button
-            {
-                Text = t, AutoSize = true, FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI Semibold", 9f), Margin = new Padding(Px(4), 0, 0, 0),
-                BackColor = primary ? Theme.Gold : Color.FromArgb(39, 39, 42), ForeColor = primary ? Theme.Ink : Color.White, Cursor = Cursors.Hand,
-            };
-            b.FlatAppearance.BorderSize = 0; b.Click += click;
+            var b = Style.Btn(t, primary);
+            b.Margin = new Padding(Px(6), 0, 0, 0); b.Click += click;
             return b;
         }
 
@@ -536,19 +539,34 @@ namespace Prosper
 
         public ApprovalForm(string tool, string what, string args)
         {
-            Text = "Allow this action?"; TopMost = true; StartPosition = FormStartPosition.CenterScreen;
+            Text = "Prosper Voice · Allow this action?"; TopMost = true; StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
-            Font = new Font("Segoe UI", 9.5f); Size = new Size(Floating.Px(520), Floating.Px(360));
-            var head = new Label { Text = "The Assistant wants to run this through your MCP server:\n" + what, Dock = DockStyle.Top, Height = Floating.Px(52), Padding = new Padding(Floating.Px(10)) };
-            var box = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, Font = new Font("Consolas", 9f),
-                Text = args.Length > 4000 ? args.Substring(0, 4000) + "…" : args };
-            var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = Floating.Px(44), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(Floating.Px(6)) };
-            Action<string, Approval> add = (t, a) => { var b = new Button { Text = t, AutoSize = true }; b.Click += (s, e) => { Result = a; Close(); }; bar.Controls.Add(b); };
-            add("Cancel", Approval.Deny);
-            add("Always allow " + tool, Approval.Always);
-            add("Allow", Approval.Allow);
-            Controls.Add(box); Controls.Add(head); Controls.Add(bar);
+            ClientSize = new Size(Style.Px(560), Style.Px(420));
+            var head = new Panel { Dock = DockStyle.Top, Height = Style.Px(96), BackColor = Style.Bg };
+            head.Controls.Add(new LogoView(Style.Px(40)) { Location = new Point(Style.Px(24), Style.Px(24)) });
+            head.Controls.Add(new Label { Text = "Allow this action?", Font = Style.Heading, ForeColor = Style.Text, AutoSize = true, Location = new Point(Style.Px(78), Style.Px(20)) });
+            head.Controls.Add(new Label
+            {
+                Text = "The Assistant wants to run this through your MCP server: " + what, Font = Style.Body, ForeColor = Style.Muted,
+                AutoSize = true, MaximumSize = new Size(Style.Px(450), Style.Px(40)), Location = new Point(Style.Px(78), Style.Px(46)),
+            });
+            var body = new Panel { Dock = DockStyle.Fill, BackColor = Style.Bg, Padding = new Padding(Style.Px(24), Style.Px(26), Style.Px(24), Style.Px(8)) };
+            var caption = new Label { Text = "WHAT IT SENDS  ·  " + tool, Font = Style.Caps, ForeColor = Style.Gold, Dock = DockStyle.Top, Height = Style.Px(22) };
+            var box = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Font = Style.Mono,
+                Text = (args.Length > 4000 ? args.Substring(0, 4000) + "…" : args).Replace("\r\n", "\n").Replace("\n", "\r\n") };
+            Shown += (s, e) => { box.Select(0, 0); ActiveControl = null; };
+            body.Controls.Add(new FieldBox(box, Style.Px(500), Style.Px(200)) { Dock = DockStyle.Fill });
+            body.Controls.Add(caption);
+            var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = Style.Px(64), FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(Style.Px(24), Style.Px(14), Style.Px(16), Style.Px(14)), BackColor = Style.Surface };
+            bar.Paint += (s, e) => { using (var p = new Pen(Style.Line)) e.Graphics.DrawLine(p, 0, 0, bar.Width, 0); };
+            Action<string, Approval, bool> add = (t, a, primary) => { var b = Style.Btn(t, primary); b.Click += (s, e) => { Result = a; Close(); }; bar.Controls.Add(b); };
+            add("Cancel", Approval.Deny, false);
+            add("Always allow", Approval.Always, false);
+            add("Allow once", Approval.Allow, true);
+            Controls.Add(body); Controls.Add(head); Controls.Add(bar);
+            Style.Window(this);
             CancelButton = (Button)bar.Controls[0];
+            AcceptButton = null; // nothing runs on Enter: a click decides
         }
     }
 }

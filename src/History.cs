@@ -106,7 +106,9 @@ namespace Prosper
                 {
                     string first = said;
                     if (string.IsNullOrWhiteSpace(first)) first = audioName ?? "";
-                    c = new Conversation { Id = Now.ToString(), Kind = kind, App = app, Title = OneLine(first), CreatedAt = Now };
+                    long stamp = Now;
+                    while (Memory.ContainsKey(stamp.ToString())) stamp++; // two in the same millisecond keep their own files
+                    c = new Conversation { Id = stamp.ToString(), Kind = kind, App = app, Title = OneLine(first), CreatedAt = Now };
                     Memory[c.Id] = c;
                 }
                 if (audioName != null) c.Messages.Add(new Msg { Role = "audio", Text = audioName, Response = Cut(audioText) });
@@ -259,17 +261,20 @@ namespace Prosper
         }
 
         public const string Style = "<meta http-equiv='X-UA-Compatible' content='IE=edge'><meta charset='utf-8'><style>" +
-            "body{font:14px 'Segoe UI',sans-serif;color:#18181B;background:#FAFAF9;margin:12px;line-height:1.5;word-wrap:break-word}" +
-            "h2,h3,h4,h5,h6{margin:12px 0 6px}p{margin:6px 0}pre{background:#F1F1F3;padding:8px 10px;border-radius:6px;white-space:pre-wrap;font:12px Consolas,monospace}" +
-            "code{background:#F1F1F3;padding:0 4px;border-radius:4px;font:12px Consolas,monospace}a{color:#0F6B4F}" +
-            "table{border-collapse:collapse;margin:6px 0}td,th{border:1px solid #E4E4E7;padding:4px 8px;text-align:left}th{background:#F1F1F3}" +
-            "blockquote{border-left:3px solid #E8C26A;margin:6px 0;padding:2px 10px;color:#52525B}ul,ol{margin:4px 0 4px 22px;padding:0}" +
-            ".user{margin:10px 0 10px 60px;background:#0F6B4F;color:#fff;padding:8px 12px;border-radius:14px 14px 4px 14px}" +
+            "body{font:14px 'Segoe UI',sans-serif;color:#F4F4F5;background:#111113;margin:16px 24px;line-height:1.55;word-wrap:break-word}" +
+            "h2,h3,h4,h5,h6{margin:12px 0 6px}p{margin:6px 0}pre{background:#1C1C1F;border:1px solid #2E2E33;padding:8px 10px;border-radius:6px;white-space:pre-wrap;font:12px Consolas,monospace}" +
+            "code{background:#27272A;padding:0 4px;border-radius:4px;font:12px Consolas,monospace}a{color:#E8C26A}" +
+            "table{border-collapse:collapse;margin:6px 0}td,th{border:1px solid #2E2E33;padding:4px 8px;text-align:left}th{background:#1C1C1F}" +
+            "blockquote{border-left:3px solid #E8C26A;margin:6px 0;padding:2px 10px;color:#A1A1AA}ul,ol{margin:4px 0 4px 22px;padding:0}" +
+            ".user{margin:10px 0 10px 60px;background:#27272A;border:1px solid #72613A;color:#F4F4F5;padding:8px 12px;border-radius:14px 14px 4px 14px}" +
             ".user img{max-width:220px;border-radius:8px;display:block;margin-bottom:6px}" +
-            ".bot{margin:10px 60px 10px 0;background:#fff;border:1px solid #E4E4E7;padding:8px 12px;border-radius:14px 14px 14px 4px}" +
-            ".tool{margin:4px 60px 4px 0;font:12px Consolas,monospace;color:#3F3F46}.tool pre{max-height:180px;overflow:auto}" +
-            ".err{color:#B91C1C;margin:8px 0}.lbl{font-size:10px;letter-spacing:1px;color:#A16207;font-weight:600}" +
-            ".audio{margin:10px 0 10px 60px;border:1px solid #E8C26A;background:#fff;padding:8px 12px;border-radius:14px}</style>";
+            ".bot{margin:10px 60px 10px 0;background:#18181B;border:1px solid #2E2E33;padding:8px 12px;border-radius:14px 14px 14px 4px}" +
+            ".tool{margin:4px 60px 4px 0;font:12px Consolas,monospace;color:#A1A1AA}.tool pre{max-height:180px;overflow:auto}" +
+            ".err{color:#F87171;margin:8px 0}.lbl{font-size:10px;letter-spacing:1px;color:#E8C26A;font-weight:600}" +
+            ".audio{margin:10px 0 10px 60px;border:1px solid #72613A;background:#18181B;padding:8px 12px;border-radius:14px}" +
+            ".empty{text-align:center;margin:56px auto 0;max-width:460px;color:#A1A1AA}.empty img{display:block;margin:0 auto 14px}" +
+            ".empty h2{color:#F4F4F5;font-size:20px;font-weight:600;margin:0 0 8px}.empty p{margin:0 0 18px}.empty .small{font-size:12px;color:#71717A}" +
+            ".chips span{display:inline-block;margin:4px;padding:6px 12px;border:1px solid #2E2E33;background:#18181B;border-radius:16px;color:#E4E4E7;font-size:12px}</style>";
 
         public static string Page(string inner) { return "<!DOCTYPE html><html><head>" + Style + "</head><body>" + inner + "</body></html>"; }
 

@@ -69,7 +69,7 @@ namespace Prosper
         public App()
         {
             ui.CreateControl();
-            tray.Icon = TrayIcon(); tray.Text = "Prosper Voice"; tray.Visible = true;
+            tray.Icon = Logo.Small(SystemInformation.SmallIconSize.Width); tray.Text = "Prosper Voice"; tray.Visible = true;
             tray.ContextMenuStrip = Menu();
             tray.DoubleClick += (s, e) => ShowHistory(null);
 
@@ -136,7 +136,7 @@ namespace Prosper
 
         ContextMenuStrip Menu()
         {
-            var m = new ContextMenuStrip();
+            var m = Style.NewMenu();
             m.Items.Add("Dictate  (Ctrl+Alt+Space)", null, (s, e) => Toggle(false));
             m.Items.Add("Assistant  (Ctrl+Alt+A)", null, (s, e) => Toggle(true));
             m.Items.Add("History  (Ctrl+Alt+H)", null, (s, e) => ShowHistory(lastConversation));
@@ -328,23 +328,6 @@ namespace Prosper
             keys.Dispose();
             tray.Visible = false;
             ExitThread();
-        }
-
-        /// <summary>The tray icon: the glass pill with its waveform and gold centre bar.</summary>
-        static Icon TrayIcon()
-        {
-            var bmp = new Bitmap(32, 32);
-            using (var g = Graphics.FromImage(bmp))
-            {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                using (var p = Floating.Round(new RectangleF(1, 6, 30, 20), 10))
-                using (var b = new SolidBrush(Color.FromArgb(24, 24, 27))) g.FillPath(b, p);
-                float[] h = { 4, 9, 13, 9, 4 };
-                using (var pen = new Pen(Color.White, 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                    for (int i = 0; i < h.Length; i++) { float x = 16 + (i - 2) * 4.4f; if (i != 2) g.DrawLine(pen, x, 16 - h[i] / 2, x, 16 + h[i] / 2); }
-                using (var gold = new Pen(Theme.Gold, 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round }) g.DrawLine(gold, 16, 16 - 6.5f, 16, 16 + 6.5f);
-            }
-            return Icon.FromHandle(bmp.GetHicon());
         }
     }
 }

@@ -1,3 +1,5 @@
+<img src="assets/logo.png" width="96" alt="Prosper Voice logo">
+
 # Prosper Voice for Windows
 
 Prosper's voice features on a PC: dictation into any app, spoken edits of selected text, and an Assistant that sees
@@ -88,6 +90,8 @@ Visual Studio, SDK or downloads:
 build.cmd
 ```
 
-The output is `dist\ProsperVoice.exe`. `tests\run.cmd` runs a self-test that needs no API key and
+The output is `dist\ProsperVoice.exe`. The logo is drawn in code (`src/Logo.cs`): the build first runs
+`tools/MakeIcon.cs` to turn it into `dist\prosper.ico`, the .exe's own icon, so the icon, the tray, the windows and
+`assets/logo.png` all come from one drawing. `tests\run.cmd` runs a self-test that needs no API key and
 records one second from the microphone. The code is plain C# 5 with WinForms and no third-party libraries, so it's
 easy to audit.
