@@ -42,6 +42,11 @@ The same features also come as an extension for [PowerToys Command Palette](http
 band, with the same shortcuts. It lives in [`prosper-cmdpal/`](prosper-cmdpal/README.md) and is built by its own
 workflow; the standalone `.exe` below is unchanged.
 
+## Python script (no install, no admin)
+
+If Python is on the PC, [`prosper-py/prosper.pyw`](prosper-py/README.md) does the same in one file, with only the
+standard library: double-click it for settings, and paste its commands into PowerToys Command Palette bookmarks.
+
 ## Set up
 
 1. Put `ProsperVoice.exe` and `install.cmd` in the same folder and double-click `install.cmd`. It installs for you

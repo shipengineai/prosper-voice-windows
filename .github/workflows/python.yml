@@ -1,0 +1,33 @@
+# Checks prosper-py/prosper.pyw on a clean Windows machine: the OpenAI request flow against a local fake server, and
+# the Windows plumbing (DPAPI, clipboard, window detection, screenshots) through ctypes, on old and new Python.
+name: Prosper Python script
+
+on:
+  push:
+    paths: ["prosper-py/**", ".github/workflows/python.yml"]
+  pull_request:
+    paths: ["prosper-py/**", ".github/workflows/python.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Tests
+        run: python prosper-py/test_prosper.py
+      - name: Command line
+        shell: pwsh
+        run: |
+          python prosper-py/prosper.pyw help | Select-Object -First 3
+          python prosper-py/prosper.pyw nonsense; if ($LASTEXITCODE -ne 2) { exit 1 } else { exit 0 }

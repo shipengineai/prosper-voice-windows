@@ -35,7 +35,7 @@ jobs:
       - name: Checksums
         shell: pwsh
         run: |
-          $files = "dist\ProsperVoice.exe", "install.cmd"
+          $files = "dist\ProsperVoice.exe", "install.cmd", "prosper-py\prosper.pyw"
           $files | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower(), (Split-Path $_ -Leaf) } |
             Set-Content -Encoding ascii SHA256SUMS.txt
           Get-Content SHA256SUMS.txt
@@ -43,7 +43,7 @@ jobs:
       - name: Publish
         shell: pwsh
         run: |
-          $assets = "dist\ProsperVoice.exe", "install.cmd", "SHA256SUMS.txt"
+          $assets = "dist\ProsperVoice.exe", "install.cmd", "prosper-py\prosper.pyw", "SHA256SUMS.txt"
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $env:TAG @assets --clobber

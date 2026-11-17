@@ -23,3 +23,7 @@ The same dictation, spoken edits and Assistant as an extension for [PowerToys Co
 3. In Command Palette, run **Reload**, then **Prosper settings** to add your OpenAI key.
 
 Check the files against `ProsperPalette-x64-SHA256SUMS.txt` / `ProsperPalette-ARM64-SHA256SUMS.txt`. Details: [`prosper-cmdpal/README.md`](https://github.com/shipengineai/prosper-voice-windows/blob/main/prosper-cmdpal/README.md).
+
+## Prosper as a Python script (no install, no admin)
+
+If Python 3.9 or newer is on the PC, download `prosper.pyw` into a folder you keep (for example `Documents\Prosper`) and double-click it: Settings opens for your OpenAI key. It needs no install, no admin rights and no extra packages. Settings also copies the lines to paste into Command Palette bookmarks (Dictate, Assistant, Add screen, History, Settings). Details: [`prosper-py/README.md`](https://github.com/shipengineai/prosper-voice-windows/blob/main/prosper-py/README.md).
