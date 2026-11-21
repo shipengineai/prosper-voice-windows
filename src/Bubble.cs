@@ -16,6 +16,56 @@ namespace Prosper
             Emerald = Color.FromArgb(15, 107, 79), Red = Color.FromArgb(239, 68, 68), Green = Color.FromArgb(74, 222, 128);
     }
 
+    /// <summary>
+    /// Keeps Prosper's windows above everything, the taskbar included. TopMost alone isn't enough: when the taskbar
+    /// (or another topmost window) is clicked or becomes the foreground window, Windows raises it above the other
+    /// topmost windows and the bar ends up hidden behind it. So whenever the foreground window changes, and every
+    /// second as a fallback, each visible Prosper window is put back at the top of the topmost band, without
+    /// taking the focus.
+    /// </summary>
+    static class OnTop
+    {
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr module, WinEventProc proc, uint pid, uint tid, uint flags);
+        delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time);
+
+        static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10, SWP_NOOWNERZORDER = 0x200, SWP_NOSENDCHANGING = 0x400;
+        const uint EVENT_SYSTEM_FOREGROUND = 0x3, EVENT_SYSTEM_MINIMIZEEND = 0x17;
+        static readonly System.Collections.Generic.List<Form> forms = new System.Collections.Generic.List<Form>();
+        static readonly WinEventProc proc = OnEvent; // kept alive: the hook calls it from native code
+        static readonly Timer every = new Timer { Interval = 1000 }, soon = new Timer { Interval = 150 };
+        static bool started;
+
+        public static void Keep(Form f)
+        {
+            forms.Add(f);
+            f.VisibleChanged += (s, e) => { if (f.Visible) Raise(f); };
+            f.FormClosed += (s, e) => forms.Remove(f);
+            if (started) return;
+            started = true;
+            every.Tick += (s, e) => RaiseAll();
+            soon.Tick += (s, e) => { soon.Stop(); RaiseAll(); };
+            every.Start();
+            // Out of context: the callback runs on this (UI) thread through its message loop.
+            try { SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero, proc, 0, 0, 0); } catch { }
+        }
+
+        static void OnEvent(IntPtr hook, uint ev, IntPtr hwnd, int obj, int child, uint thread, uint time)
+        {
+            RaiseAll();
+            soon.Stop(); soon.Start(); // the taskbar sometimes raises itself again just after it is activated
+        }
+
+        static void RaiseAll() { foreach (var f in forms.ToArray()) if (f.Visible) Raise(f); }
+
+        public static void Raise(Form f)
+        {
+            if (!f.IsHandleCreated || f.IsDisposed) return;
+            SetWindowPos(f.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING);
+        }
+    }
+
     /// <summary>A topmost window that never becomes the active window, even when clicked.</summary>
     class Floating : Form
     {
@@ -26,6 +76,7 @@ namespace Prosper
         {
             FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true;
             StartPosition = FormStartPosition.Manual; DoubleBuffered = true;
+            OnTop.Keep(this);
         }
         protected override bool ShowWithoutActivation { get { return true; } }
         protected override CreateParams CreateParams
@@ -107,6 +158,7 @@ namespace Prosper
             clickWait.Interval = SystemInformation.DoubleClickTime;
             clickWait.Tick += (s, e) => { clickWait.Stop(); pending = false; if (Tap != null) Tap(); };
             holdWait.Tick += (s, e) => { holdWait.Stop(); if (!dragging && state == BarState.Rest) { held = true; if (Hold != null) Hold(); } };
+            OnTop.Keep(this);
         }
 
         protected override bool ShowWithoutActivation { get { return true; } }
