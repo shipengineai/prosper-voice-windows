@@ -12,12 +12,16 @@ installed and no admin rights are needed: copy it to the laptop and run it.
 |---|---|---|
 | Dictate into the app you're typing in (click again to stop) | click | Ctrl+Alt+Space |
 | Assistant: ask for an email, a reply, an answer… | double-click | Ctrl+Alt+A |
+| Type to the Assistant about the selected text (no talking) | hover, then **Type** | Ctrl+Alt+T |
 | Add the screen to the Assistant request | **Add screen** in the bar | Ctrl+Alt+S |
 | History and follow-up chat | hold | Ctrl+Alt+H |
 | Menu: settings, hide the bar when idle, quit | right-click | |
 
+Every shortcut can be changed in *Settings → Shortcuts*: click one and press the keys you want (Backspace turns it
+off). Prosper says straight away if another app or another Prosper action already uses them.
+
 **The Prosper bar** is a small frosted-glass pill at the bottom centre of the screen; drag it anywhere. At rest it is a
-thin sliver with a gold dot, and hovering shows what it does. While you talk it opens into **✕ cancel · timer · live
+thin sliver with a gold dot; hovering shows *Click to talk* and a **Type** button. While you talk it opens into **✕ cancel · timer · live
 waveform · ✓ finish**. The waveform follows your voice: tall while you speak, flat in pauses, and it adjusts to quiet
 mics by itself. In Assistant mode the bar gets a gold edge, a ✦ and an **Add screen** button. While Prosper works,
 the bar says what it is doing ("Transcribing", "Thinking with your screen"), then confirms ("Typed · copied").
@@ -29,6 +33,12 @@ the bar says what it is doing ("Transcribing", "Thinking with your screen"), the
 - **The Assistant** writes what you ask for. It gets your request, the selected text, the app's name, *About you*
   from settings, and the screen if you clicked **Add screen**. If a text field has focus, the answer is typed
   there; otherwise it opens in a card with Insert, Copy and Open chat. Every answer is also copied.
+- **Typing instead of talking** (an open office, a meeting): select text, hover the bar and click **Type**, or press
+  Ctrl+Alt+T. A small box opens above the bar with the selection, quick actions (Fix grammar, Shorter, More formal,
+  Reply to this) and a line to type what you want. The answer shows in the box first and is copied: **Replace
+  selection** (Ctrl+Enter) puts it in the app, or type again to refine it ("shorter", "in Hindi"). If the Assistant
+  needs something only you know, such as who a reply is for, it asks one short question there instead of guessing; a
+  voice request that needs an answer opens the same box. Esc or clicking elsewhere closes it.
 - **History** keeps every conversation: what you said, the screenshot, the answer, and each tool call. You can type
   or speak follow-ups there, or attach an audio file (📎, up to 25 MB) to get its transcript or ask about it.
 - **MCP (optional, off until you connect a server)**: in settings, enter a server URL and then either *Sign in*

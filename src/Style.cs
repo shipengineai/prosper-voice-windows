@@ -404,6 +404,17 @@ namespace Prosper
             }
             g.Restore(state);
         }
+        public static void Keyboard(Graphics g, float cx, float cy, float s, Color c)
+        {
+            float u = s / 16;
+            using (var p = P(c, s * 0.9f))
+            using (var body = Floating.Round(new RectangleF(cx - 7 * u, cy - 4.5f * u, 14 * u, 9 * u), 2 * u)) g.DrawPath(p, body);
+            using (var b = new SolidBrush(c))
+            {
+                for (int i = 0; i < 4; i++) g.FillRectangle(b, cx - 4.6f * u + i * 3 * u, cy - 2.2f * u, 1.6f * u, 1.6f * u);
+                g.FillRectangle(b, cx - 3.5f * u, cy + 1.2f * u, 7 * u, 1.5f * u);
+            }
+        }
         public static void Plus(Graphics g, float cx, float cy, float s, Color c)
         {
             float u = s / 16;

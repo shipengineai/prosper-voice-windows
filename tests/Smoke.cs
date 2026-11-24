@@ -50,6 +50,13 @@ namespace Prosper
             Check("tool description", Ai.Describe("api_request", "{\"method\":\"post\",\"url\":\"https://api.github.com/repos/x/y/issues\"}") == "POST api.github.com/repos/x/y/issues");
             Check("audio types", Ai.AudioType(".WAV") == "audio/wav" && Ai.AudioType("m4a") == "audio/mp4");
 
+            // Shortcuts the user sets: read back the same, need a modifier, and default when never set.
+            Check("shortcut round trip", Combo.Parse("Ctrl+Alt+Space").ToString() == "Ctrl+Alt+Space" && Combo.Parse("ctrl+shift+/").ToString() == "Ctrl+Shift+/");
+            Check("shortcut keys", Combo.Parse("Ctrl+Alt+T").Key == System.Windows.Forms.Keys.T && Combo.Parse("Ctrl+Alt+T").Mods == (Combo.Ctrl | Combo.Alt));
+            Check("shortcut needs a modifier", !Combo.Parse("A").Usable && !Combo.Parse("Shift+A").Usable && Combo.Parse("F9").Usable && Combo.Parse("Win+K").Usable);
+            Check("shortcut off", Combo.Parse("").None && !Combo.Parse("").Usable);
+            Check("shortcut defaults", Shortcuts.Default(Shortcuts.Type) == "Ctrl+Alt+T" && Shortcuts.Default(Shortcuts.Dictate) == "Ctrl+Alt+Space");
+
             // Never Ctrl+C into a terminal.
             Check("unknown window counts as a terminal (no Ctrl+C)", Target.IsTerminal(IntPtr.Zero));
 

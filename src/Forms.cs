@@ -71,6 +71,15 @@ namespace Prosper
         readonly Label pageNote = new Label { AutoSize = true, Font = Style.Body, ForeColor = Style.Muted };
         readonly Panel pages = new Panel { Dock = DockStyle.Fill, BackColor = Style.Bg };
         readonly System.Collections.Generic.List<NavItem> nav = new System.Collections.Generic.List<NavItem>();
+        readonly System.Collections.Generic.Dictionary<int, KeyField> keyFields = new System.Collections.Generic.Dictionary<int, KeyField>();
+
+        /// <summary>Why [c] can't be shortcut [id]: another Prosper action has it, or another app does.</summary>
+        string Clash(int id, Combo c)
+        {
+            foreach (var kv in keyFields)
+                if (kv.Key != id && kv.Value.Value.Same(c)) return "Already used for " + Shortcuts.What(kv.Key).ToLowerInvariant();
+            return Hotkeys.Free(c) ? null : "Taken by another app";
+        }
 
         public SettingsForm()
         {
@@ -153,17 +162,31 @@ namespace Prosper
             Page("MCP server", "Connect tools the Assistant can use. Off until you set one up.", mcp);
 
             // ---- Shortcuts ----
-            var keys = NewCard("Keyboard", "These work in any app.");
-            Shortcut(keys, "Ctrl+Alt+Space", "Dictate. Press again to stop.");
-            Shortcut(keys, "Ctrl+Alt+A", "Assistant. Press again to stop.");
-            Shortcut(keys, "Ctrl+Alt+S", "Add the screen while the Assistant listens");
-            Shortcut(keys, "Ctrl+Alt+H", "History and chat");
+            var keys = NewCard("Keyboard", "These work in any app. Click one and press the keys you want; it's saved with Save.");
+            foreach (int id in Shortcuts.All)
+            {
+                var f = new KeyField(Shortcuts.Get(id));
+                int me = id;
+                f.Check = c => Clash(me, c);
+                f.Changed += () => Say("", Style.Muted);
+                keyFields[id] = f;
+                var row = new Panel { Size = new Size(keys.Inner, f.Height + Style.Px(6)), BackColor = Style.Surface, Margin = new Padding(0) };
+                row.Controls.Add(new Label { Text = Shortcuts.What(id), AutoSize = true, ForeColor = Style.Text, Location = new Point(0, Style.Px(10)) });
+                f.Location = new Point(keys.Inner - f.Width, Style.Px(3));
+                row.Controls.Add(f);
+                keys.Controls.Add(row);
+            }
+            var reset = Style.Btn("Reset to defaults");
+            reset.Click += (o, e) => { foreach (int id in Shortcuts.All) keyFields[id].Reset(Shortcuts.Default(id)); };
+            keys.Controls.Add(Gap(6)); keys.Controls.Add(reset);
             var mouse = NewCard("The Prosper bar", "At the bottom of the screen; drag it anywhere.");
             Shortcut(mouse, "Click", "Dictate");
-            Shortcut(mouse, "Double-click", "Assistant");
+            Shortcut(mouse, "Hover › Type", "Type to the Assistant about the selected text");
+            Shortcut(mouse, "Double-click", "Assistant by voice");
             Shortcut(mouse, "Hold", "History");
             Shortcut(mouse, "Right-click", "Menu: settings, hide the bar, quit");
             Page("Shortcuts", "Everything Prosper does is one key or one click away.", keys, mouse);
+            FormClosed += (o, e) => Hotkeys.Resume(); // in case it closed while a shortcut was being recorded
 
             // ---- frame: sidebar, header, footer ----
             var side = new Panel { Dock = DockStyle.Left, Width = Style.Px(220), BackColor = Style.Surface, Padding = new Padding(Style.Px(12)) };
@@ -299,6 +322,8 @@ namespace Prosper
             s.McpAllowed = mcpAllowed.Text.Trim();
             s.McpOn = mcpOn.Checked && s.McpServer.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
             try { Startup.On = startup.Checked; } catch { }
+            foreach (var kv in keyFields)
+                if (!kv.Value.HasProblem) Shortcuts.Set(kv.Key, kv.Value.Value.ToString()); // one with a clash keeps the old keys
             Settings.Save();
             if (Saved != null) Saved();
         }

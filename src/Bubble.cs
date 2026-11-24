@@ -129,13 +129,13 @@ namespace Prosper
         [StructLayout(LayoutKind.Sequential)] struct SIZE { public int cx, cy; public SIZE(int cx, int cy) { this.cx = cx; this.cy = cy; } }
         [StructLayout(LayoutKind.Sequential, Pack = 1)] struct BLENDFUNCTION { public byte BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat; }
 
-        public event Action Tap, DoubleTap, Hold, ShowMenu, Cancel, Finish, ToggleScreen;
+        public event Action Tap, DoubleTap, Hold, ShowMenu, Cancel, Finish, ToggleScreen, TypeTap;
         public Func<float> LevelSource;
         public bool ExcludedFromCapture { get; private set; }
         public static bool AllowCapture; // --preview: so the design can be screenshotted
 
         BarState state;
-        bool hover, screenAdded, keepVisible = true;
+        bool hover, typeHover, screenAdded, keepVisible = true;
         string message, step; Color messageColor; bool messageIsError;
         readonly Stopwatch since = new Stopwatch();
         readonly Timer frame = new Timer { Interval = 33 };
@@ -144,7 +144,7 @@ namespace Prosper
         readonly Timer holdWait = new Timer { Interval = 600 };
         readonly Random noise = new Random();
         float w, h, level, spin, ceiling = 0.3f; // the pill's current (animated) size, the smoothed voice level, its recent loudest
-        RectangleF pill, cancelBtn, finishBtn, camBtn;
+        RectangleF pill, cancelBtn, finishBtn, camBtn, typeBtn;
         Point down, origin; bool dragging, held, pending;
         readonly Font font = new Font("Segoe UI Semibold", 9f), small = new Font("Segoe UI", 8.5f);
 
@@ -245,11 +245,11 @@ namespace Prosper
                 case BarState.Working:
                     string t = step ?? "Working";
                     return new SizeF(Math.Min(Width - 20 * px, g.MeasureString(t, font).Width + 50 * px), 32 * px);
-                default: return hover ? new SizeF(Math.Min(Width - 20 * px, g.MeasureString(Hint, small).Width + 46 * px), 32 * px) : new SizeF(50 * px, 12 * px);
+                default: return hover ? new SizeF(g.MeasureString(Hint, small).Width + g.MeasureString(TypeLabel, small).Width + 92 * px, 32 * px) : new SizeF(50 * px, 12 * px);
             }
         }
 
-        const string Hint = "Click to dictate · double-click for Assistant · hold for history";
+        const string Hint = "Click to talk", TypeLabel = "Type"; // short: double-click and hold are in the menu and Settings
 
         void Draw()
         {
@@ -303,7 +303,7 @@ namespace Prosper
         void DrawContent(Graphics g, RectangleF r)
         {
             float px = Floating.Dpi, cy = r.Y + r.Height / 2;
-            cancelBtn = finishBtn = camBtn = RectangleF.Empty;
+            cancelBtn = finishBtn = camBtn = typeBtn = RectangleF.Empty;
             if (message != null && state == BarState.Rest)
             {
                 float x = r.X + 14 * px;
@@ -318,6 +318,12 @@ namespace Prosper
                     {
                         DrawMic(g, r.X + 18 * px, cy, Theme.Gold);
                         DrawLabel(g, Hint, small, Color.FromArgb(235, 255, 255, 255), r.X + 30 * px, cy);
+                        // Type: ask the Assistant about the selection by typing, for when talking isn't an option.
+                        float tw = g.MeasureString(TypeLabel, small).Width + 34 * px;
+                        typeBtn = new RectangleF(r.Right - tw - 5 * px, cy - 11 * px, tw, 22 * px);
+                        using (var p = Floating.Round(typeBtn, 11 * px)) using (var b = new SolidBrush(typeHover ? Color.FromArgb(242, 210, 138) : Theme.Gold)) g.FillPath(b, p);
+                        Glyphs.Keyboard(g, typeBtn.X + 13 * px, cy, 13 * px, Theme.Ink);
+                        DrawLabel(g, TypeLabel, small, Theme.Ink, typeBtn.X + 22 * px, cy);
                     }
                     else using (var b = new SolidBrush(Theme.Gold)) g.FillEllipse(b, r.X + r.Width / 2 - 2 * px, cy - 2 * px, 4 * px, 4 * px);
                     break;
@@ -464,18 +470,20 @@ namespace Prosper
         // ---- mouse ----
 
         protected override void OnMouseEnter(EventArgs e) { hover = true; Animate(); base.OnMouseEnter(e); }
-        protected override void OnMouseLeave(EventArgs e) { hover = false; Animate(); base.OnMouseLeave(e); }
+        protected override void OnMouseLeave(EventArgs e) { hover = typeHover = false; Cursor = Cursors.Default; Animate(); base.OnMouseLeave(e); }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Right) { if (state == BarState.Rest && ShowMenu != null) ShowMenu(); return; }
             if (e.Button != MouseButtons.Left) return;
             down = Cursor.Position; origin = Location; dragging = false; held = false;
-            if (state == BarState.Rest) holdWait.Start();
+            if (state == BarState.Rest && !typeBtn.Contains(e.Location)) holdWait.Start();
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            bool overType = state == BarState.Rest && typeBtn.Contains(e.Location);
+            if (overType != typeHover) { typeHover = overType; Cursor = overType ? Cursors.Hand : Cursors.Default; Draw(); }
             if (e.Button != MouseButtons.Left) return;
             var p = Cursor.Position;
             if (!dragging && (Math.Abs(p.X - down.X) > Floating.Px(4) || Math.Abs(p.Y - down.Y) > Floating.Px(4))) { dragging = true; holdWait.Stop(); }
@@ -498,6 +506,7 @@ namespace Prosper
             switch (state)
             {
                 case BarState.Rest:
+                    if (typeBtn.Contains(e.Location)) { clickWait.Stop(); pending = false; if (TypeTap != null) TypeTap(); return; }
                     if (pending) { clickWait.Stop(); pending = false; if (DoubleTap != null) DoubleTap(); return; }
                     pending = true; clickWait.Start(); // a second click within the double-click time is a double-click
                     break;

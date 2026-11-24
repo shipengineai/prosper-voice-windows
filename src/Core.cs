@@ -126,6 +126,12 @@ namespace Prosper
         public string McpAccessSealed { get; set; }
         public string McpRefreshSealed { get; set; }
         public string McpManualSealed { get; set; }  // a token pasted by hand, for servers without OAuth
+        // Global shortcuts ("Ctrl+Alt+A"); null means the default, "" means off. See Shortcuts.
+        public string KeyDictate { get; set; }
+        public string KeyAssist { get; set; }
+        public string KeyType { get; set; }
+        public string KeyScreen { get; set; }
+        public string KeyHistory { get; set; }
 
         public Settings()
         {

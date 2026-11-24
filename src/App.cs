@@ -30,23 +30,8 @@ namespace Prosper
         }
     }
 
-    /// <summary>Receives the global shortcuts (RegisterHotKey: no keyboard hook, nothing else is read).</summary>
-    class Hotkeys : NativeWindow, IDisposable
-    {
-        public event Action<int> Pressed;
-        public Hotkeys() { CreateHandle(new CreateParams()); }
-        public bool Add(int id, Keys key) { return Native.RegisterHotKey(Handle, id, Native.MOD_CONTROL | Native.MOD_ALT | Native.MOD_NOREPEAT, (uint)key); }
-        protected override void WndProc(ref Message m)
-        {
-            if (m.Msg == Native.WM_HOTKEY && Pressed != null) Pressed(m.WParam.ToInt32());
-            base.WndProc(ref m);
-        }
-        public void Dispose() { for (int i = 1; i <= 4; i++) Native.UnregisterHotKey(Handle, i); DestroyHandle(); }
-    }
-
     class App : ApplicationContext
     {
-        const int HkDictate = 1, HkAssist = 2, HkScreen = 3, HkHistory = 4;
         readonly Control ui = new Control();
         readonly NotifyIcon tray = new NotifyIcon();
         readonly Bar bar = new Bar();
@@ -56,6 +41,8 @@ namespace Prosper
         readonly System.Windows.Forms.Timer autoStop = new System.Windows.Forms.Timer { Interval = 10 * 60 * 1000 }; // 10 minutes: under OpenAI's 25 MB
         HistoryForm history;
         SettingsForm settings;
+        AskBox ask;
+        string askConversation, askPrevious; // the typed conversation: its History entry and OpenAI response to continue
 
         enum Mode { Idle, Recording, Working }
         Mode mode;
@@ -80,6 +67,7 @@ namespace Prosper
             bar.Finish += () => { if (mode == Mode.Recording) Stop(); };
             bar.Cancel += CancelRecording;
             bar.ToggleScreen += AddScreen;
+            bar.TypeTap += () => TypeToAssistant();
             bar.LevelSource = () => recorder.Level;
             bar.PlaceSaved();
             bar.KeepVisible = S.ShowBubble;
@@ -90,25 +78,26 @@ namespace Prosper
 
             keys.Pressed += id =>
             {
-                if (id == HkDictate) Toggle(false);
-                else if (id == HkAssist) Toggle(true);
-                else if (id == HkScreen) { if (mode == Mode.Recording && assist) AddScreen(); }
-                else if (id == HkHistory) ShowHistory(lastConversation);
+                if (id == Shortcuts.Dictate) Toggle(false);
+                else if (id == Shortcuts.Assist) Toggle(true);
+                else if (id == Shortcuts.Type) TypeToAssistant();
+                else if (id == Shortcuts.Screen) { if (mode == Mode.Recording && assist) AddScreen(); }
+                else if (id == Shortcuts.History) ShowHistory(lastConversation);
             };
             if (Preview) { Demo(); return; } // no shortcuts, no setup: just the bar
-            var taken = new System.Collections.Generic.List<string>();
-            if (!keys.Add(HkDictate, Keys.Space)) taken.Add("Ctrl+Alt+Space");
-            if (!keys.Add(HkAssist, Keys.A)) taken.Add("Ctrl+Alt+A");
-            if (!keys.Add(HkScreen, Keys.S)) taken.Add("Ctrl+Alt+S");
-            if (!keys.Add(HkHistory, Keys.H)) taken.Add("Ctrl+Alt+H");
-            if (taken.Count > 0)
-            {
-                Log.Write("shortcuts taken by another app: " + string.Join(", ", taken));
-                Balloon(string.Join(", ", taken) + " already belong to another app: use the bar for those.");
-            }
+            ApplyKeys();
 
             if (!S.Configured) { Balloon("Add your OpenAI API key to start."); ShowSettings(); }
-            else if (!S.ShowBubble) Balloon("Prosper Voice is running. Ctrl+Alt+Space to dictate, Ctrl+Alt+A for the Assistant.");
+            else if (!S.ShowBubble) Balloon("Prosper Voice is running. Hover the bar, or use your shortcuts" + Shortcuts.Hint(Shortcuts.Dictate) + ".");
+        }
+
+        /// <summary>Registers the shortcuts from settings (again, after they change) and says which another app has.</summary>
+        void ApplyKeys()
+        {
+            var taken = keys.Apply();
+            if (taken.Count == 0) return;
+            Log.Write("shortcuts taken by another app: " + taken.Count);
+            Balloon(string.Join(", ", taken) + (taken.Count == 1 ? " belongs" : " belong") + " to another app. Pick another in Settings → Shortcuts, or use the bar.");
         }
 
         public static bool Preview;
@@ -137,9 +126,10 @@ namespace Prosper
         ContextMenuStrip Menu()
         {
             var m = Style.NewMenu();
-            m.Items.Add("Dictate  (Ctrl+Alt+Space)", null, (s, e) => Toggle(false));
-            m.Items.Add("Assistant  (Ctrl+Alt+A)", null, (s, e) => Toggle(true));
-            m.Items.Add("History  (Ctrl+Alt+H)", null, (s, e) => ShowHistory(lastConversation));
+            m.Items.Add("Dictate" + Shortcuts.Hint(Shortcuts.Dictate), null, (s, e) => Toggle(false));
+            m.Items.Add("Assistant" + Shortcuts.Hint(Shortcuts.Assist), null, (s, e) => Toggle(true));
+            m.Items.Add("Type to the Assistant" + Shortcuts.Hint(Shortcuts.Type), null, (s, e) => TypeToAssistant());
+            m.Items.Add("History" + Shortcuts.Hint(Shortcuts.History), null, (s, e) => ShowHistory(lastConversation));
             m.Items.Add("-");
             m.Items.Add(S.ShowBubble ? "Hide the bar when idle" : "Show the bar", null, (s, e) => { S.ShowBubble = !S.ShowBubble; Settings.Save(); ApplyBar(); });
             m.Items.Add("Move the bar back to the bottom", null, (s, e) => { S.BarX = -1; S.BarY = -1; Settings.Save(); bar.PlaceSaved(); });
@@ -163,6 +153,7 @@ namespace Prosper
             if (mode == Mode.Recording) { Stop(); return; }
             if (!S.Configured) { ShowSettings(); return; }
             card.Hide();
+            if (ask != null && ask.Visible) { ask.Hide(); await Task.Delay(120); } // the app behind it comes back to the front
             assist = assistant; screen = null; mode = Mode.Working; // until the target is read
             target = await Target.Capture();
             string why = recorder.Start();
@@ -235,7 +226,7 @@ namespace Prosper
                         var ctx = new AssistContext
                         {
                             App = t.Editable ? t.App : (t.App ?? "the computer") + " (no text field is focused: your answer is shown to the user and copied)",
-                            Selected = t.Selected, AboutMe = S.AboutMe,
+                            Selected = t.Selected, AboutMe = S.AboutMe, CanAsk = true, // a question opens the Ask box
                         };
                         return Ai.RunAssistant(said, ctx, useMcp, token, null, step, Confirm, image);
                     }
@@ -253,6 +244,14 @@ namespace Prosper
                 lastConversation = c.Id;
             }
             if (error != null) { Done(); Say(error, 6000, true); return; }
+            if (result.IsQuestion)
+            {
+                // The Assistant needs one more thing: ask it in the Ask box, where the answer can be typed.
+                Done();
+                askConversation = lastConversation; askPrevious = result.ResponseId;
+                Ask().OpenWithQuestion(result.Text, t.App, t.Editable, t.Selected != null, bar.PillOnScreen);
+                return;
+            }
 
             bool type = !result.IsStatus && (t.Editable || t.Selected != null);
             if (a) Clip.Copy(result.Text); // every Assistant answer is ready to paste again
@@ -276,6 +275,78 @@ namespace Prosper
         }
 
         void Done() { mode = Mode.Idle; bar.State = BarState.Rest; }
+
+        // ---- typing to the Assistant ----
+
+        AskBox Ask()
+        {
+            if (ask != null && !ask.IsDisposed) return ask;
+            ask = new AskBox();
+            ask.Send += AskSend;
+            ask.Accept += async text =>
+            {
+                ask.Hide();
+                await Task.Delay(80);
+                await Insert(text);
+                Say(target != null && target.Selected != null ? "Replaced" : "Inserted", 1600);
+            };
+            ask.OpenChat += () => ShowHistory(askConversation ?? lastConversation);
+            return ask;
+        }
+
+        /// <summary>
+        /// The Type button or its shortcut: reads the selection in the app in front (as a voice request does), then
+        /// opens the Ask box above the bar. Pressed again while the box is open, it closes it.
+        /// </summary>
+        async void TypeToAssistant()
+        {
+            if (ask != null && ask.Visible) { ask.Hide(); return; }
+            if (mode != Mode.Idle) return; // recording or working: one thing at a time
+            if (!S.Configured) { ShowSettings(); return; }
+            card.Hide();
+            mode = Mode.Working; // while the selection is read
+            try { target = await Target.Capture(); }
+            finally { mode = Mode.Idle; }
+            if (target.IsOurs) return; // Prosper's own window was in front
+            askConversation = null; askPrevious = null;
+            Ask().Open(target.Selected, target.App, target.Editable, bar.PillOnScreen);
+            Log.Write("typed request " + (target.Selected != null ? "with selection" : "without selection"));
+        }
+
+        /// <summary>A typed request, an answer to the Assistant's question, or a refinement of its last answer.</summary>
+        async void AskSend(string text)
+        {
+            var t = target; var box = ask;
+            if (t == null || box == null) return;
+            bool first = askPrevious == null;
+            string previous = askPrevious;
+            box.Working("Thinking");
+            Action<string> step = m => ui.BeginInvoke((Action)(() => { if (!box.IsDisposed) box.Working(m); }));
+            AssistResult result = null; string error = null;
+            try
+            {
+                result = await Task.Run(() =>
+                {
+                    bool useMcp = S.McpOn && S.McpServer.Length > 0;
+                    string token = useMcp ? Mcp.AccessToken() : null;
+                    // The first request carries the selection and the app; later ones continue that conversation.
+                    var ctx = first
+                        ? new AssistContext { App = (t.App ?? "the computer") + " (the answer is shown to the user first; they choose to put it in)", Selected = t.Selected, AboutMe = S.AboutMe, CanAsk = true }
+                        : new AssistContext { CanAsk = true };
+                    return Ai.RunAssistant(text, ctx, useMcp, token, previous, step, Confirm, null);
+                });
+            }
+            catch (Exception e) { while (e is AggregateException && e.InnerException != null) e = e.InnerException; error = e.Message; }
+
+            var c = History.Add(askConversation, "assistant", t.App, text, result, error);
+            askConversation = lastConversation = c.Id;
+            if (box.IsDisposed) return;
+            if (error != null) { box.Fail(error); return; }
+            askPrevious = result.ResponseId;
+            if (result.IsQuestion) { box.Question(result.Text); return; }
+            Clip.Copy(result.Text); // like every Assistant answer: ready to paste, even if the box is closed
+            box.Answer(result.Text, result.IsStatus);
+        }
 
         /// <summary>Pastes into the window that was in front when the recording started.</summary>
         async Task Insert(string text)
@@ -316,7 +387,7 @@ namespace Prosper
             if (settings == null || settings.IsDisposed)
             {
                 settings = new SettingsForm();
-                settings.Saved += ApplyBar;
+                settings.Saved += () => { ApplyBar(); if (!Preview) ApplyKeys(); };
                 settings.FormClosed += (s, e) => settings = null;
             }
             settings.Show(); settings.Activate();
