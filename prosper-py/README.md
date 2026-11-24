@@ -24,6 +24,7 @@ In Command Palette (Win+Alt+Space), type **Add bookmark**, paste the line as the
 |---|---|
 | Prosper Dictate | Starts dictation into the app you're typing in; run it again (or click ✓ on the pill) to finish |
 | Prosper Assistant | Starts the Assistant; run it again to finish |
+| Prosper Ask | Type to the Assistant about the selected text, when you can't talk: opens the Ask box |
 | Prosper Add screen | While the Assistant is recording, adds your screen to the request |
 | Prosper History | What you said and what Prosper answered |
 | Prosper Settings | Key, models, About you, MCP server |
@@ -39,8 +40,13 @@ Each line looks like this, using your own Python and file path:
 ## Global shortcuts
 
 Tick *Start with Windows* in settings, or run `pythonw prosper.pyw run`. Prosper then stays in the background with
-**Ctrl+Alt+Space** (dictate), **Ctrl+Alt+A** (Assistant) and **Ctrl+Alt+S** (add screen). *Start with Windows* writes
-only your own `HKCU\…\Run` value, so it needs no admin either. The bookmarks keep working alongside it.
+**Ctrl+Alt+Space** (dictate), **Ctrl+Alt+A** (Assistant), **Ctrl+Alt+T** (type to the Assistant), **Ctrl+Alt+S**
+(add screen) and **Ctrl+Alt+H** (history). *Start with Windows* writes only your own `HKCU\…\Run` value, so it needs
+no admin either. The bookmarks keep working alongside it.
+
+Change any of them under *Shortcuts* in settings: click one and press the keys you want (Backspace turns it off, Esc
+keeps the old one). Settings says straight away if another app or another Prosper action already has those keys, and
+**Save** applies them without a restart.
 
 ## What it does
 
@@ -50,6 +56,12 @@ only your own `HKCU\…\Run` value, so it needs no admin either. The bookmarks k
 - **The Assistant** writes what you ask for. It gets your request, the selected text, the app's name, *About you*,
   and the screen if you clicked **Add screen**. If a text field has focus, the answer is typed there; otherwise it opens
   in a window with Copy. Every answer is also copied.
+- **Typing instead of talking** (an open office, a meeting): select text and press Ctrl+Alt+T (or run the *Prosper
+  Ask* bookmark). A small box opens near the bottom of the screen with the selection, quick actions (Fix grammar,
+  Shorter, More formal, Reply to this) and a line to type what you want. The answer shows in the box first and is
+  copied: **Replace selection** (Ctrl+Enter) puts it in the app, or type again to refine it. If the Assistant needs
+  something only you know, such as who a reply is for, it asks one short question there instead of guessing; a voice
+  request that needs an answer opens the same box. Esc or clicking elsewhere closes it.
 - **MCP (optional):** enter a server URL and an access token in settings. Tools on your *Always allowed* list run
   straight away; every other tool call asks first.
 

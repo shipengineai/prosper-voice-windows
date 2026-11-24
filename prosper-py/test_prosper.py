@@ -53,7 +53,13 @@ class FakeOpenAI(http.server.BaseHTTPRequestHandler):
                 self._send(200, {"choices": [{"message": {"content": "Hello, world."}}]})
         elif self.path.endswith("/responses"):
             body = json.loads(raw)
-            if "previous_response_id" not in body:
+            if body.get("previous_response_id") == "resp_q":  # the user answered the Assistant's question
+                self._send(200, {"id": "resp_a", "output": [{"type": "message", "content": [
+                    {"type": "output_text", "text": "Hi Priya, Thursday works."}]}]})
+            elif "QUESTION:" in body.get("instructions", "") and "draft the reply" in json.dumps(body["input"]):
+                self._send(200, {"id": "resp_q", "output": [{"type": "message", "content": [
+                    {"type": "output_text", "text": "QUESTION: Who is it for?"}]}]})
+            elif "previous_response_id" not in body:
                 self._send(200, {"id": "resp_1", "output": [
                     {"type": "mcp_list_tools", "tools": []},
                     {"type": "mcp_approval_request", "id": "apr_1", "name": "create_issue", "arguments": "{}"}]})
@@ -117,6 +123,35 @@ class Tests(unittest.TestCase):
         self.assertEqual(first["reasoning"], {"effort": "high"})
         self.assertTrue(first["input"][0]["content"][1]["image_url"].startswith("data:image/png;base64,"))
         self.assertIn(prosper.ACTIONS.strip()[:30], first["instructions"])
+        self.assertNotIn("QUESTION:", first["instructions"])  # only asks where the answer can be typed
+
+    def test_assistant_asks_then_continues(self):
+        ai = prosper.OpenAI(self.settings())
+        text, status, _ = ai.assistant("draft the reply", {"app": "Outlook", "selected_text": "see you?"}, None, None,
+                                       lambda step: None, can_ask=True)
+        self.assertEqual((text, status, ai.last_id), ("Who is it for?", "question", "resp_q"))
+        text, status, _ = ai.assistant("Priya", {}, None, None, lambda step: None, previous="resp_q", can_ask=True)
+        self.assertEqual((text, status, ai.last_id), ("Hi Priya, Thursday works.", False, "resp_a"))
+        sent = json.loads([r for r in FakeOpenAI.seen if r[1].endswith("/responses")][-1][3])
+        self.assertEqual(sent["previous_response_id"], "resp_q")
+        self.assertEqual(sent["input"], "<request>\nPriya\n</request>")  # the rest is in the earlier response
+        self.assertIn("spoke or typed", sent["instructions"])
+
+    def test_shortcuts(self):
+        self.assertEqual(prosper.parse_combo("Ctrl+Alt+Space"), (prosper.MOD_CTRL | prosper.MOD_ALT, 0x20))
+        for text in ("Ctrl+Alt+T", "Ctrl+Shift+/", "Alt+F2", "Ctrl+Win+K", "F9", "Ctrl+Alt+Num 5"):
+            self.assertEqual(prosper.combo_name(*prosper.parse_combo(text)), text)
+        self.assertEqual(prosper.combo_name(*prosper.parse_combo("win+ctrl+k")), "Ctrl+Win+K")
+        self.assertEqual(prosper.parse_combo(""), (0, 0))
+        self.assertEqual(prosper.parse_combo("Ctrl+Nonsense"), (0, 0))
+        self.assertFalse(prosper.combo_usable(*prosper.parse_combo("A")))
+        self.assertFalse(prosper.combo_usable(*prosper.parse_combo("Shift+A")))
+        self.assertTrue(prosper.combo_usable(*prosper.parse_combo("F9")))
+        s = dict(prosper.DEFAULTS, keys={"ask": "Ctrl+Shift+K", "screen": ""})
+        self.assertEqual(prosper.shortcut(s, "ask"), "Ctrl+Shift+K")
+        self.assertEqual(prosper.shortcut(s, "screen"), "")  # turned off
+        self.assertEqual(prosper.shortcut(s, "dictate"), "Ctrl+Alt+Space")  # never set: the default
+        self.assertEqual(prosper.shortcut(dict(prosper.DEFAULTS), "ask"), "Ctrl+Alt+T")
 
     def test_test_connection(self):
         self.assertEqual(prosper.OpenAI(self.settings()).test(), "Connected to 127.0.0.1")
@@ -179,6 +214,37 @@ class WindowsTests(unittest.TestCase):
         name, pid, title, cls = prosper.window_info(prosper.GetForegroundWindow())
         self.assertIsInstance(name, str)
         self.assertFalse(prosper.is_target(None))
+
+    def test_shortcut_thread_pauses_and_reloads(self):
+        import queue
+        import time
+        combo = prosper.parse_combo("Ctrl+Alt+Shift+F12")  # unlikely to belong to anything on a test machine
+        if not prosper.hotkey_free(*combo):
+            self.skipTest("Ctrl+Alt+Shift+F12 is taken here")
+
+        class FakeApp:
+            hotkey_thread, results, commands = 0, queue.Queue(), queue.Queue()
+        app = FakeApp()
+        real_load = prosper.load_settings
+        only_ask = dict({c: "" for c, _, _ in prosper.SHORTCUTS}, ask="Ctrl+Alt+Shift+F12")  # the rest off
+        prosper.load_settings = lambda: dict(prosper.DEFAULTS, keys=only_ask)
+        try:
+            threading.Thread(target=prosper.hotkeys, args=(app,), daemon=True).start()
+
+            def until(cond):
+                end = time.time() + 3
+                while time.time() < end and not cond():
+                    time.sleep(0.05)
+                return cond()
+            self.assertTrue(until(lambda: app.hotkey_thread and not prosper.hotkey_free(*combo)))  # registered
+            prosper.PostThreadMessageW(app.hotkey_thread, prosper.WM_APP_PAUSE_KEYS, 0, 0)
+            self.assertTrue(until(lambda: prosper.hotkey_free(*combo)))  # paused: the keys reach settings
+            prosper.PostThreadMessageW(app.hotkey_thread, prosper.WM_APP_RELOAD_KEYS, 0, 0)
+            self.assertTrue(until(lambda: not prosper.hotkey_free(*combo)))  # registered again
+        finally:
+            prosper.PostThreadMessageW(app.hotkey_thread, prosper.WM_APP_PAUSE_KEYS, 0, 0)
+            prosper.PostThreadMessageW(app.hotkey_thread, 0x0012, 0, 0)  # WM_QUIT
+            prosper.load_settings = real_load
 
     def test_screenshot_is_png(self):
         try:
