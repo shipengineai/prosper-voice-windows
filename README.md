@@ -120,13 +120,18 @@ easy to audit.
 
 ## Release
 
-Ready-to-run builds are on the [Releases](../../releases) page. To publish a new one, push a version tag:
+Ready-to-run builds are on the [Releases](../../releases) page. To publish a new one, open
+**Actions → Release → Run workflow** and leave the version empty: it takes the next one after the latest release
+(v1.2 → v1.3). Type a version (v2.0) to choose it yourself. From the command line:
 
 ```bat
-git tag v1.1
-git push origin v1.1
+gh workflow run release.yml
 ```
 
-The *Release* GitHub Action (`.github/workflows/release.yml`) then builds the `.exe` on a clean Windows machine, runs
-the self-test, and publishes `ProsperVoice.exe`, `install.cmd` and `SHA256SUMS.txt` with install notes and the list of
-changes. It can also be run by hand from the Actions tab; for an existing release it replaces the files.
+Pushing a tag works too (`git tag v1.4`, then `git push origin v1.4`).
+
+The *Release* GitHub Action (`.github/workflows/release.yml`) then builds the `.exe` on a clean Windows machine with
+that version stamped in, runs the self-test, tags the commit, and publishes `ProsperVoice.exe`, `install.cmd`,
+`prosper.pyw` and `SHA256SUMS.txt` with install notes and the list of changes. It also starts the Command Palette
+workflow, which adds its packages to the same release. Run it again with an existing version to replace that
+release's files.

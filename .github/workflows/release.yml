@@ -1,6 +1,9 @@
 # Builds ProsperVoice.exe on a clean Windows machine and publishes it as a GitHub Release.
-# Push a tag to release:  git tag v1.1  then  git push origin v1.1
-# Or run it by hand from the Actions tab with a tag name (an existing release gets its files replaced).
+#
+# One click: Actions > Release > Run workflow, leaving the tag empty. It takes the next version after the latest
+# release (v1.2 -> v1.3), tags the selected branch, publishes the release, and starts the Command Palette workflow so
+# its packages are attached too. Or name a tag (v2.0) to choose the number; an existing release gets its files replaced.
+# Pushing a tag works as well:  git tag v1.4  then  git push origin v1.4
 name: Release
 
 on:
@@ -9,20 +12,46 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release, e.g. v1.1 (created on the selected branch if it doesn't exist)"
-        required: true
+        description: "Version to release, e.g. v2.0. Leave empty for the next one after the latest release."
+        required: false
 
 permissions:
-  contents: write # create the release and upload its files; nothing else
+  contents: write # create the tag and release, upload its files
+  actions: write  # start the Command Palette workflow for a release made from this page
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: windows-latest
     env:
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # every tag, to find the latest version
+
+      - name: Version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag || github.ref_name }}"
+          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ github.event.inputs.tag }}" -eq "") {
+            # The next version after the highest vX.Y[.Z] tag: v1.2 -> v1.3, v1.2.4 -> v1.3.
+            $latest = git tag --list "v*" | Where-Object { $_ -match '^v\d+(\.\d+){0,2}$' } |
+              Sort-Object { [version]((@($_.TrimStart('v').Split('.')) + @('0', '0'))[0..2] -join '.') } | Select-Object -Last 1
+            if (-not $latest) { $tag = "v1.0" } else {
+              $p = @($latest.TrimStart('v').Split('.')) + @('0')
+              $tag = "v" + $p[0] + "." + ([int]$p[1] + 1)
+            }
+          }
+          if ($tag -notmatch '^v\d+(\.\d+){0,3}$') { Write-Error "Not a version tag: $tag (use v1.3 or v1.3.1)"; exit 1 }
+          # The .exe reports this version (the log, file properties): v1.3 -> 1.3.0.0.
+          $n = (@($tag.TrimStart('v').Split('.')) + @('0', '0', '0'))[0..3] -join '.'
+          (Get-Content src\Core.cs -Raw) -replace 'AssemblyVersion\("[^"]*"\)', "AssemblyVersion(""$n"")" | Set-Content -NoNewline -Encoding utf8 src\Core.cs
+          "TAG=$tag" >> $env:GITHUB_ENV
+          Write-Host "Releasing $tag (file version $n)"
 
       - name: Build
         shell: cmd
@@ -54,3 +83,11 @@ jobs:
             if ($LASTEXITCODE -ne 0) { gh release upload $env:TAG @assets --clobber }
           }
           if ($LASTEXITCODE -ne 0) { exit 1 }
+          "Published: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/releases/tag/$env:TAG" >> $env:GITHUB_STEP_SUMMARY
+
+      # A tag created here doesn't start other workflows by itself (GitHub's rule for its own token), so start the
+      # Command Palette build for it. A pushed tag has already started it.
+      - name: Command Palette packages
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: gh workflow run cmdpal.yml --ref "${{ github.ref_name }}" -f tag=$env:TAG
