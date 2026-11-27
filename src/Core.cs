@@ -132,6 +132,15 @@ namespace Prosper
         public string KeyType { get; set; }
         public string KeyScreen { get; set; }
         public string KeyHistory { get; set; }
+        public string KeyFocus { get; set; }
+        public string KeyFocusMore { get; set; }
+        public string KeyMeeting { get; set; }
+        // Focus: the plan comes from Notion (made on the phone). The productivity settings themselves are shared
+        // through Notion; these are only this PC's connection and display choices.
+        public bool FocusOn { get; set; }
+        public bool TaskbarLabel { get; set; }
+        public string FocusDb { get; set; }
+        public string NotionTokenSealed { get; set; }
 
         public Settings()
         {
@@ -139,7 +148,11 @@ namespace Prosper
             Cleanup = true; ScreenshotButton = true; KeepHistory = true; ShowBubble = true; BarX = -1; BarY = -1;
             ApiKeySealed = ""; McpServer = ""; McpAllowed = ""; McpClientId = ""; McpTokenUrl = "";
             McpAccessSealed = ""; McpRefreshSealed = ""; McpManualSealed = "";
+            TaskbarLabel = true; FocusDb = ""; NotionTokenSealed = "";
         }
+
+        public string NotionToken { get { return Secret.OpenText(NotionTokenSealed); } }
+        public void SetNotionToken(string t) { NotionTokenSealed = Secret.SealText((t ?? "").Trim()); }
 
         public string ApiKey { get { return Secret.OpenText(ApiKeySealed); } }
         public void SetApiKey(string k) { ApiKeySealed = Secret.SealText((k ?? "").Trim()); }

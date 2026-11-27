@@ -9,6 +9,6 @@ if not exist dist mkdir dist
   /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll ^
   /r:System.Net.Http.dll /r:System.Security.dll /r:System.Web.Extensions.dll ^
   /r:"%FW%\WPF\UIAutomationClient.dll" /r:"%FW%\WPF\UIAutomationTypes.dll" /r:"%FW%\WPF\WindowsBase.dll" ^
-  src\*.cs tests\Smoke.cs
+  src\*.cs tests\*.cs
 if errorlevel 1 exit /b 1
 dist\SelfTest.exe %*

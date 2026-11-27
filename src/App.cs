@@ -16,7 +16,9 @@ namespace Prosper
         static void Main()
         {
             bool first;
-            using (var once = new Mutex(true, @"Local\ProsperVoice", out first))
+            bool preview = Array.IndexOf(Environment.GetCommandLineArgs(), "--preview") > 0;
+            // --preview registers no shortcuts and touches no data, so it may run beside the real Prosper.
+            using (var once = new Mutex(true, preview ? @"Local\ProsperVoicePreview" : @"Local\ProsperVoice", out first))
             {
                 if (!first) { MessageBox.Show("Prosper Voice is already running: look for its icon in the tray.", "Prosper Voice"); return; }
                 Application.EnableVisualStyles();
@@ -39,6 +41,7 @@ namespace Prosper
         readonly Hotkeys keys = new Hotkeys();
         readonly Recorder recorder = new Recorder("prosperrec");
         readonly System.Windows.Forms.Timer autoStop = new System.Windows.Forms.Timer { Interval = 10 * 60 * 1000 }; // 10 minutes: under OpenAI's 25 MB
+        FocusController focus;
         HistoryForm history;
         SettingsForm settings;
         AskBox ask;
@@ -59,6 +62,10 @@ namespace Prosper
             tray.Icon = Logo.Small(SystemInformation.SmallIconSize.Width); tray.Text = "Prosper Voice"; tray.Visible = true;
             tray.ContextMenuStrip = Menu();
             tray.DoubleClick += (s, e) => ShowHistory(null);
+            // Focus: the timer lives on the taskbar; a click on the tray icon opens its controls while a block runs.
+            focus = new FocusController(tray, Preview ? new FocusData() : FocusData.Load());
+            tray.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left && focus.On) focus.ToggleFlyout(); };
+            tray.MouseDown += (s, e) => { if (e.Button == MouseButtons.Right) { var old = tray.ContextMenuStrip; tray.ContextMenuStrip = Menu(); if (old != null) old.Dispose(); } }; // fresh switches
 
             bar.Tap += () => Toggle(false);
             bar.DoubleTap += () => Toggle(true);
@@ -83,9 +90,13 @@ namespace Prosper
                 else if (id == Shortcuts.Type) TypeToAssistant();
                 else if (id == Shortcuts.Screen) { if (mode == Mode.Recording && assist) AddScreen(); }
                 else if (id == Shortcuts.History) ShowHistory(lastConversation);
+                else if (id == Shortcuts.FocusPanel) focus.ToggleFlyout();
+                else if (id == Shortcuts.FocusMore) { focus.Engine.Adjust(5); focus.Apply(); }
+                else if (id == Shortcuts.Meeting) { focus.Engine.ToggleMeeting(); focus.Apply(); }
             };
-            if (Preview) { Demo(); return; } // no shortcuts, no setup: just the bar
+            if (Preview) { focus.PlayDemo(Demo); return; } // no shortcuts, no setup: the bar, then Focus
             ApplyKeys();
+            focus.Start();
 
             if (!S.Configured) { Balloon("Add your OpenAI API key to start."); ShowSettings(); }
             else if (!S.ShowBubble) Balloon("Prosper Voice is running. Hover the bar, or use your shortcuts" + Shortcuts.Hint(Shortcuts.Dictate) + ".");
@@ -106,7 +117,7 @@ namespace Prosper
         /// ProsperVoice.exe --preview: plays through every state of the bar with the real microphone level, so the design
         /// and the waveform can be seen without an API key. Nothing is recorded to disk or sent anywhere.
         /// </summary>
-        async void Demo()
+        async Task Demo()
         {
             bar.KeepVisible = true;
             await Task.Delay(1200);
@@ -120,7 +131,7 @@ namespace Prosper
             bar.State = BarState.Working; bar.Step("Transcribing"); await Task.Delay(1500);
             bar.Step("Thinking with your screen"); await Task.Delay(2000);
             Done(); Say("Typed · copied", 2500); await Task.Delay(3500);
-            Say("Preview done. Quit from the tray, then start Prosper normally.", 6000);
+            Say("Now Focus: the timer on the taskbar", 3000); await Task.Delay(3000);
         }
 
         ContextMenuStrip Menu()
@@ -130,6 +141,15 @@ namespace Prosper
             m.Items.Add("Assistant" + Shortcuts.Hint(Shortcuts.Assist), null, (s, e) => Toggle(true));
             m.Items.Add("Type to the Assistant" + Shortcuts.Hint(Shortcuts.Type), null, (s, e) => TypeToAssistant());
             m.Items.Add("History" + Shortcuts.Hint(Shortcuts.History), null, (s, e) => ShowHistory(lastConversation));
+            m.Items.Add("-");
+            // Focus: nothing about the plan here, only switches.
+            m.Items.Add(S.FocusOn ? "Focus: on" : "Focus: off", null, (s, e) => { S.FocusOn = !S.FocusOn; Settings.Save(); ApplyBar(); if (!Preview) ApplyKeys(); focus.Apply(); });
+            if (S.FocusOn)
+            {
+                m.Items.Add((focus.Engine.MeetingOn ? "Meeting mode: on" : "Meeting mode: off") + Shortcuts.Hint(Shortcuts.Meeting), null, (s, e) => { focus.Engine.ToggleMeeting(); focus.Apply(); });
+                m.Items.Add("Sync now", null, (s, e) => focus.Sync());
+            }
+            m.Items.Add("Focus settings", null, (s, e) => ShowSettings(SettingsForm.FocusPage));
             m.Items.Add("-");
             m.Items.Add(S.ShowBubble ? "Hide the bar when idle" : "Show the bar", null, (s, e) => { S.ShowBubble = !S.ShowBubble; Settings.Save(); ApplyBar(); });
             m.Items.Add("Move the bar back to the bottom", null, (s, e) => { S.BarX = -1; S.BarY = -1; Settings.Save(); bar.PlaceSaved(); });
@@ -382,19 +402,21 @@ namespace Prosper
             history.Activate();
         }
 
-        void ShowSettings()
+        void ShowSettings(int page = 0)
         {
             if (settings == null || settings.IsDisposed)
             {
-                settings = new SettingsForm();
-                settings.Saved += () => { ApplyBar(); if (!Preview) ApplyKeys(); };
+                settings = new SettingsForm(focus);
+                settings.Saved += () => { ApplyBar(); if (!Preview) ApplyKeys(); focus.Apply(); };
                 settings.FormClosed += (s, e) => settings = null;
             }
             settings.Show(); settings.Activate();
+            if (page > 0) settings.Go(page);
         }
 
         void Quit()
         {
+            focus.Dispose();
             recorder.Cancel();
             keys.Dispose();
             tray.Visible = false;
