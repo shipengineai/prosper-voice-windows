@@ -8,7 +8,7 @@ using System.Threading;
 
 namespace Prosper
 {
-    static class Tests
+    static partial class Tests
     {
         static int failed;
         static void Check(string name, bool ok, string detail = "")
@@ -81,6 +81,8 @@ namespace Prosper
                 Console.WriteLine("      (loudest sample " + peak + "; 0 means Windows gave silence: check microphone privacy)");
                 if (f != null) File.Delete(f);
             }
+
+            FocusChecks();
 
             Console.WriteLine(failed == 0 ? "All checks passed." : failed + " check(s) failed.");
             return failed == 0 ? 0 : 1;
