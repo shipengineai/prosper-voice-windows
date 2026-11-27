@@ -118,8 +118,10 @@ namespace Prosper
     /// <summary>What each shortcut does, its default, and where it is kept in settings.</summary>
     static class Shortcuts
     {
-        public const int Dictate = 1, Assist = 2, Screen = 3, History = 4, Type = 5;
-        public static readonly int[] All = { Dictate, Assist, Type, Screen, History };
+        public const int Dictate = 1, Assist = 2, Screen = 3, History = 4, Type = 5, FocusPanel = 6, FocusMore = 7, Meeting = 8;
+        public static readonly int[] All = { Dictate, Assist, Type, Screen, History, FocusPanel, FocusMore, Meeting };
+
+        public static bool IsFocus(int id) { return id == FocusPanel || id == FocusMore || id == Meeting; }
 
         public static string Default(int id)
         {
@@ -129,6 +131,9 @@ namespace Prosper
                 case Assist: return "Ctrl+Alt+A";
                 case Type: return "Ctrl+Alt+T";
                 case Screen: return "Ctrl+Alt+S";
+                case FocusPanel: return "Ctrl+Alt+F";
+                case FocusMore: return "";
+                case Meeting: return "Ctrl+Alt+M";
                 default: return "Ctrl+Alt+H";
             }
         }
@@ -141,6 +146,9 @@ namespace Prosper
                 case Assist: return "Assistant by voice";
                 case Type: return "Type to the Assistant";
                 case Screen: return "Add the screen while it listens";
+                case FocusPanel: return "Focus timer controls";
+                case FocusMore: return "Focus: 5 more minutes";
+                case Meeting: return "Focus: meeting mode on or off";
                 default: return "History and chat";
             }
         }
@@ -155,6 +163,9 @@ namespace Prosper
                 case Assist: v = s.KeyAssist; break;
                 case Type: v = s.KeyType; break;
                 case Screen: v = s.KeyScreen; break;
+                case FocusPanel: v = s.KeyFocus; break;
+                case FocusMore: v = s.KeyFocusMore; break;
+                case Meeting: v = s.KeyMeeting; break;
                 default: v = s.KeyHistory; break;
             }
             return v ?? Default(id);
@@ -169,6 +180,9 @@ namespace Prosper
                 case Assist: s.KeyAssist = v; break;
                 case Type: s.KeyType = v; break;
                 case Screen: s.KeyScreen = v; break;
+                case FocusPanel: s.KeyFocus = v; break;
+                case FocusMore: s.KeyFocusMore = v; break;
+                case Meeting: s.KeyMeeting = v; break;
                 default: s.KeyHistory = v; break;
             }
         }
@@ -200,6 +214,7 @@ namespace Prosper
             {
                 var c = Combo.Parse(Shortcuts.Get(id));
                 if (!c.Usable) continue;
+                if (Shortcuts.IsFocus(id) && !Settings.Current.FocusOn) continue; // Focus keys stay free until Focus is on
                 if (!Native.RegisterHotKey(Handle, id, c.Mods | Native.MOD_NOREPEAT, (uint)c.Key)) taken.Add(c.ToString());
             }
             return taken;

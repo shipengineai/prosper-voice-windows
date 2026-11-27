@@ -15,7 +15,9 @@ installed and no admin rights are needed: copy it to the laptop and run it.
 | Type to the Assistant about the selected text (no talking) | hover, then **Type** | Ctrl+Alt+T |
 | Add the screen to the Assistant request | **Add screen** in the bar | Ctrl+Alt+S |
 | History and follow-up chat | hold | Ctrl+Alt+H |
-| Menu: settings, hide the bar when idle, quit | right-click | |
+| Menu: settings, Focus, hide the bar when idle, quit | right-click | |
+| Focus: open the timer controls | click the taskbar timer | Ctrl+Alt+F |
+| Focus: meeting mode on or off | **Meeting** in the timer controls | Ctrl+Alt+M |
 
 Every shortcut can be changed in *Settings → Shortcuts*: click one and press the keys you want (Backspace turns it
 off). Prosper says straight away if another app or another Prosper action already uses them.
@@ -25,7 +27,8 @@ thin sliver with a gold dot; hovering shows *Click to talk* and a **Type** butto
 waveform · ✓ finish**. The waveform follows your voice: tall while you speak, flat in pauses, and it adjusts to quiet
 mics by itself. In Assistant mode the bar gets a gold edge, a ✦ and an **Add screen** button. While Prosper works,
 the bar says what it is doing ("Transcribing", "Thinking with your screen"), then confirms ("Typed · copied").
-`ProsperVoice.exe --preview` plays through every state with your real microphone level and no API calls.
+`ProsperVoice.exe --preview` plays through every state with your real microphone level and no API calls, then every
+Focus state with a made-up block. It can run beside your real Prosper and touches none of your data.
 
 - **Dictation** is transcribed, cleaned up (no ums, proper punctuation) and pasted where the cursor is.
 - **With text selected**, what you say is an instruction for that text ("make this formal", "translate to Hindi"),
@@ -44,6 +47,89 @@ the bar says what it is doing ("Transcribing", "Thinking with your screen"), the
 - **MCP (optional, off until you connect a server)**: in settings, enter a server URL and then either *Sign in*
   (OAuth, in your browser) or paste an access token. Tools on your *Always allowed* list run straight away; every
   other tool call asks Allow / Always allow / Cancel first.
+
+## Focus
+
+Focus runs timeboxed blocks from the day plan you make on your phone. Each block has a check-in every 30 minutes and
+can be extended once, and breaks are encouraged but never trap you. The plan lives in one Notion database shared
+with the Prosper phone app. This PC reads it and writes back only what happened.
+
+**What you see.** While a block runs, a small **● 38:12** shows on the taskbar, just left of the tray icons, with a
+thin gold line for progress. The Prosper tray icon turns into a gold ring with the minutes left. Nothing else is on
+screen, and the Prosper bar is unchanged.
+
+| When | What happens |
+|---|---|
+| A block starts | A card at the bottom right says *Focus · 60 min* with **Start** and **Snooze 5 min**. If you ignore it, the block starts by itself after 2 minutes. |
+| You click the timer or the tray icon, or press Ctrl+Alt+F | The controls open: **● Focus 38:12 [−5] [+5] [Meeting] [✓]**. Use them to move the end, turn on meeting mode, or finish now. |
+| Every 30 minutes | A card asks *Closer to your goal than 30 min ago?* with **On track**, **Stuck** and **Detoured**. Help for Stuck or Detoured is on the phone. With no answer after a minute, it is recorded as none. |
+| The last 10 minutes | The timer gets a gold edge and reads *10:00 · wrap up*. Nothing pops up. |
+| Time's up | The screen dims and asks *Did you reach your goal?* with **Yes, done**, **+15 min (once)** and **Park it**. Each block gets one extension, counted across all your devices. |
+| Before a break | *Break starts in seconds* counts down from 10, with **Start now**, **+5 min** and **Cancel**. |
+| During a break | Every monitor goes near-black, with a ring, the countdown and *Stand up. Walk. Water.* **Skip this break** is always there; a reason is optional and is kept with the break. Ctrl+Alt+Del, Alt+Tab and Windows itself are never blocked. |
+| After 90 minutes of work without a break | A 15-minute break is suggested, with the same warning. The block waits while you rest. |
+| Meeting mode is on (Ctrl+Alt+M or the controls) | No check-ins, warnings or break screens appear. A due break waits, and the timer says *Break waiting*. Meeting mode switches itself off after 2 hours and is shared with the phone. |
+| After the last block | *Day done*: the review is on the phone. |
+
+**Privacy.** The laptop shows only the kind of block (Focus, Break, Me-time or Travel) and the time, never a task
+name, a goal or the plan. Tooltips and the tray menu follow the same rule, and this PC never reads names or goals
+from Notion. Like the bar, every Focus window is kept out of screenshots and screen shares.
+
+**Time is never lost.** Each session stores when it started and when it ends, and the countdown is worked out from
+those every second. A restart, sleep or a dropped network changes nothing. The plan and today's sessions are cached
+on this PC, encrypted with DPAPI, and changes made offline are sent when Notion is reachable again.
+
+### Set up Focus
+
+1. Make a Notion integration at [notion.so/my-integrations](https://www.notion.so/my-integrations) and copy its
+   token. Share a page with it (••• → Connections).
+2. In *Settings → Focus*, paste the token and click **Connect**. Prosper finds the **Prosper Focus** database if
+   the phone already made it. If there is none, paste the link of the shared page and click **Create**.
+3. Tick *Use Focus on this PC* and click **Save**.
+4. Add your routines and blocks on the phone or straight in Notion. The laptop picks up changes within a minute.
+
+The settings at the bottom of the Focus page (check-in interval, break length, the 90-minute rule, meeting length
+and others) are shared with every device through the database's "⚙ Focus settings" row.
+
+### The Notion database
+
+There is one database, **Prosper Focus**. Each row has a **Kind**:
+
+| Property | Type | Used by |
+|---|---|---|
+| Name | title | every row (a session's name is only its kind and time, such as "Focus 14:15") |
+| Kind | select: Routine, Block, Override, Session, Parking, Settings | every row |
+| Type | select: Focus, Learning, Work, Break, Me-time, Travel, Free, Other | Block, Session |
+| Days | multi-select Mon…Sun | Routine |
+| Routine | relation to the same database | Block (its routine), Override (the routine used that day) |
+| Start, End | text, "HH:mm" 24-hour | Block |
+| Date | date | Override (the day), a one-off Block for that day only, Session, Parking |
+| Goal | text, read only by the phone | Block |
+| Check-in | number, minutes (0 = off, empty = the shared setting; Learning blocks always check in) | Block |
+| Block | relation to the same database | Session |
+| Key | text, `yyyy-MM-dd\|blockId\|HH:mm`, one per block per day | Session |
+| Planned, Actual | date ranges | Session |
+| Ends at | date and time: the end both devices count down to | Session |
+| State | select: Running, Done, Parked, Skipped, Ended early | Session |
+| Extensions | number, at most 1 | Session |
+| Check-ins | text, such as "14:45 on-track \| 15:15 stuck \| 15:45 none" | Session |
+| Skip reason, Meeting min | text, number | Session (breaks) |
+| Device, Rev | text, number (+1 on every write) | Session |
+| Data | text (JSON) | the one "⚙ Focus settings" row |
+
+**Which blocks make up a day:**
+1. Blocks dated that day, if there are any.
+2. Otherwise, the routine named by a date override for that day.
+3. Otherwise, the routine whose Days include that weekday.
+
+Gaps and Free blocks are idle time.
+
+**Sync:**
+- **When:** Prosper reads Notion every 20 seconds while a block is on and every 60 seconds otherwise. It also syncs right after any change, on wake and on unlock.
+- **No duplicates:** a session is looked up by its Key before it is created. If two devices still create one at the same moment, the oldest row is kept and the other is archived.
+- **Conflicts:** the higher Rev wins, a finished session is never reopened, and the extension count only goes up.
+
+For now Focus is only in the standalone `.exe`; the Command Palette extension and `prosper.pyw` don't have it yet.
 
 ## PowerToys Command Palette extension
 
@@ -78,8 +164,8 @@ Built to be safe on a work laptop:
 - **No admin rights, nothing installed.** It runs as you (`asInvoker`). It installs no services, drivers or keyboard
   hooks. Shortcuts use `RegisterHotKey`, so no keystrokes are read. *Start with Windows* only writes your own
   `HKCU\…\Run` value.
-- **Only talks to your AI endpoint**, and to an MCP server if you connect one. No telemetry, no updates, no other
-  hosts. The endpoint can be api.openai.com or your company's **Azure OpenAI** or other compatible endpoint
+- **Only talks to your AI endpoint**, to an MCP server if you connect one, and to api.notion.com if you set up
+  Focus (with your own integration token, encrypted like the API key). No telemetry, no updates, no other hosts. The endpoint can be api.openai.com or your company's **Azure OpenAI** or other compatible endpoint
   (`https://` only).
 - **Network:** TLS 1.2 or newer, through the proxy Windows uses, with your Windows sign-in where the proxy asks for it.
 - **Secrets** (API key, MCP tokens) are encrypted with Windows DPAPI for your account only. They are never shown,

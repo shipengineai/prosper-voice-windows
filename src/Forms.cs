@@ -81,8 +81,18 @@ namespace Prosper
             return Hotkeys.Free(c) ? null : "Taken by another app";
         }
 
-        public SettingsForm()
+        public const int FocusPage = 4;
+        readonly FocusController focus;
+        readonly TextBox notionToken = new TextBox { UseSystemPasswordChar = true }, focusDb = new TextBox(), focusParent = new TextBox();
+        readonly Label focusStatus = new Label { AutoSize = true, Font = Style.Small, Margin = new Padding(Style.Px(6), Style.Px(9), 0, 0) };
+        Toggle focusOn, taskbarLabel;
+        readonly System.Collections.Generic.Dictionary<string, TextBox> numbers = new System.Collections.Generic.Dictionary<string, TextBox>();
+
+        public void Go(int page) { if (page >= 0 && page < nav.Count) ShowPage(page); }
+
+        public SettingsForm(FocusController focus = null)
         {
+            this.focus = focus;
             Text = "Prosper Voice · Settings"; StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false; MinimizeBox = false;
             ClientSize = new Size(Style.Px(860), Style.Px(660));
@@ -161,6 +171,9 @@ namespace Prosper
             mcp.Controls.Add(Gap(4)); mcp.Controls.Add(Flow(signIn, signOut)); mcp.Controls.Add(mcpStatus);
             Page("MCP server", "Connect tools the Assistant can use. Off until you set one up.", mcp);
 
+            // ---- Focus ----
+            BuildFocusPage(inner);
+
             // ---- Shortcuts ----
             var keys = NewCard("Keyboard", "These work in any app. Click one and press the keys you want; it's saved with Save.");
             foreach (int id in Shortcuts.All)
@@ -229,6 +242,101 @@ namespace Prosper
             Style.Window(this);
             AcceptButton = save; CancelButton = cancel;
             ShowPage(0);
+        }
+
+        /// <summary>
+        /// Settings → Focus: the Notion connection, this PC's switches, and the settings every device shares (they
+        /// are saved to the "⚙ Focus settings" row in Notion, so the phone shows the same).
+        /// </summary>
+        void BuildFocusPage(int inner)
+        {
+            var s = Settings.Current;
+            focusOn = new Toggle("Use Focus on this PC: timer, check-ins and breaks from your plan", inner);
+            taskbarLabel = new Toggle("Show the timer on the taskbar (the tray icon always counts down)", inner);
+            focusOn.Checked = s.FocusOn; taskbarLabel.Checked = s.TaskbarLabel;
+            focusDb.Text = s.FocusDb;
+
+            var test = Style.Btn("Connect");
+            test.Click += async (o, e) =>
+            {
+                Apply(); focusStatus.ForeColor = Style.Muted; focusStatus.Text = "Connecting…";
+                try
+                {
+                    string db = Settings.Current.FocusDb;
+                    string said = await Task.Run(() =>
+                    {
+                        string me = Notion.Test();
+                        if (db.Length == 0) db = Notion.FindDatabase();
+                        if (db.Length == 0) return me + " No Prosper Focus database yet: paste a page link below and click Create.";
+                        Notion.EnsureSchema(db);
+                        return me + " Database ready.";
+                    });
+                    if (db.Length > 0) { focusDb.Text = db; Settings.Current.FocusDb = db; Settings.Save(); if (focus != null) focus.SyncSoon(200); }
+                    focusStatus.Text = said; focusStatus.ForeColor = db.Length > 0 ? Style.Ok : Style.Muted;
+                }
+                catch (Exception x) { focusStatus.Text = Unwrap(x); focusStatus.ForeColor = Style.Bad; }
+            };
+            var create = Style.Btn("Create");
+            create.Click += async (o, e) =>
+            {
+                Apply(); focusStatus.ForeColor = Style.Muted; focusStatus.Text = "Creating the database…";
+                string parent = focusParent.Text;
+                try
+                {
+                    string db = await Task.Run(() => Notion.CreateDatabase(parent));
+                    focusDb.Text = db; Settings.Current.FocusDb = db; Settings.Save();
+                    focusStatus.Text = "Created \"" + Notion.DbTitle + "\". Add your routines and blocks on the phone or in Notion."; focusStatus.ForeColor = Style.Ok;
+                    if (focus != null) focus.SyncSoon(200);
+                }
+                catch (Exception x) { focusStatus.Text = Unwrap(x); focusStatus.ForeColor = Style.Bad; }
+            };
+            focusStatus.MaximumSize = new Size(inner, 0);
+            focusStatus.Text = s.NotionToken.Length == 0 ? "Not connected." : focus != null ? focus.Status : "";
+            focusStatus.ForeColor = Style.Muted;
+
+            var notion = NewCard("Notion", "Your plan lives in one Notion database, shared with the phone. This PC reads it and writes back only what happened.");
+            Field(notion, "Integration token", notionToken, s.NotionToken.Length > 0 ? "Saved and encrypted. Paste a new token to replace it." : "From notion.so/my-integrations (ntn_…). Encrypted for your Windows account.");
+            Field(notion, "Database", focusDb, "Leave empty and click Connect: Prosper finds \"" + Notion.DbTitle + "\" if the phone made it. Or paste its link.");
+            Field(notion, "New database in this page", focusParent, "Only if there's none yet: a page shared with the integration (••• → Connections).");
+            notion.Controls.Add(Gap(6));
+            notion.Controls.Add(Flow(test, create));
+            notion.Controls.Add(focusStatus);
+
+            var pc = NewCard("On this PC", "Only \"Focus\" or \"Break\" and the time are shown here, never task names or goals, and every Focus window stays out of screen shares.");
+            pc.Controls.Add(focusOn); pc.Controls.Add(taskbarLabel);
+
+            var c = focus != null ? focus.Engine.Data.Config : new FocusConfig();
+            var shared = NewCard("Shared with every device", "Saved to Notion, so the phone and your other laptop use the same.");
+            int third = (inner - Style.Px(32)) / 3;
+            shared.Controls.Add(Flow(Number("Check-in every (min)", "checkinMin", c.checkinMin, third), Number("Wrap-up warning (min)", "wrapUpMin", c.wrapUpMin, third), Number("Break warning (s)", "warnSec", c.warnSec, third)));
+            shared.Controls.Add(Flow(Number("Break length (min)", "breakMin", c.breakMin, third), Number("Break after working (min)", "autoBreakAfterMin", c.autoBreakAfterMin, third), Number("Extension (min, once)", "extendMin", c.extendMin, third)));
+            shared.Controls.Add(Flow(Number("Meeting mode ends after (min)", "meetingAutoOffMin", c.meetingAutoOffMin, third), Number("Snooze (min)", "snoozeMin", c.snoozeMin, third), Number("Auto-start after (min)", "startGraceMin", c.startGraceMin, third)));
+            Page("Focus", "Timeboxed blocks from your plan, check-ins and breaks. The plan is made on your phone.", notion, pc, shared);
+        }
+
+        Control Number(string label, string key, int value, int width)
+        {
+            var box = new TextBox { Text = value.ToString() };
+            numbers[key] = box;
+            return Labelled(label, new FieldBox(box, width));
+        }
+
+        void ApplyFocus()
+        {
+            var s = Settings.Current;
+            if (notionToken.Text.Trim().Length > 0) { s.SetNotionToken(notionToken.Text); notionToken.Text = ""; }
+            string db = Notion.IdOf(focusDb.Text);
+            if (db != s.FocusDb) s.FocusDb = db;
+            s.FocusOn = focusOn.Checked; s.TaskbarLabel = taskbarLabel.Checked;
+            if (focus == null) return;
+            var c = focus.Engine.Data.Config.Copy(); bool changed = false;
+            foreach (var kv in numbers)
+            {
+                int v; if (!int.TryParse(kv.Value.Text.Trim(), out v) || v < 0 || v > 600) continue;
+                var p = typeof(FocusConfig).GetProperty(kv.Key);
+                if ((int)p.GetValue(c, null) != v) { p.SetValue(c, v, null); changed = true; }
+            }
+            if (changed) focus.SetConfig(c);
         }
 
         // ---- building blocks ----
@@ -322,6 +430,7 @@ namespace Prosper
             s.McpAllowed = mcpAllowed.Text.Trim();
             s.McpOn = mcpOn.Checked && s.McpServer.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
             try { Startup.On = startup.Checked; } catch { }
+            ApplyFocus();
             foreach (var kv in keyFields)
                 if (!kv.Value.HasProblem) Shortcuts.Set(kv.Key, kv.Value.Value.ToString()); // one with a clash keeps the old keys
             Settings.Save();
